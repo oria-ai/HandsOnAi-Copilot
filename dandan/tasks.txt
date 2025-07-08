@@ -1,0 +1,43 @@
+# Configuration Tasks for Golden Protect Website
+
+1.  **Google OAuth Credentials:**
+    -   Create a new project in the Google Cloud Console (https://console.cloud.google.com/).
+    -   Go to "APIs & Services" -> "Credentials".
+    -   Create an "OAuth client ID" for a "Web application".
+    -   Add `http://localhost:3000` to "Authorized JavaScript origins".
+    -   Add `http://localhost:3000/api/auth/callback/google` to "Authorized redirect URIs".
+    -   Copy the "Client ID" and "Client Secret".
+    -   Add the following variables to the `gp-website/.env` file:
+        ```
+        GOOGLE_CLIENT_ID="YOUR_GOOGLE_CLIENT_ID"
+        GOOGLE_CLIENT_SECRET="YOUR_GOOGLE_CLIENT_SECRET"
+        ```
+
+2.  **NextAuth Secret:**
+    -   Generate a random string for the NextAuth secret. You can use the command: `openssl rand -base64 32`
+    -   Add the following variable to `gp-website/.env`:
+        ```
+        AUTH_SECRET="YOUR_GENERATED_SECRET"
+        ```
+
+3.  **Stripe API Keys:**
+    -   Sign up for a Stripe account (https://dashboard.stripe.com/register).
+    -   Find your API keys in the Stripe Dashboard under "Developers" -> "API keys".
+    -   Add the following variables to `gp-website/.env`:
+        ```
+        STRIPE_SECRET_KEY="sk_test_..."
+        NEXT_PUBLIC_STRIPE_PUBLIC_KEY="pk_test_..."
+        ```
+    - Note: The public key is prefixed with `NEXT_PUBLIC_` so it can be accessed on the client-side.
+
+4.  **Stripe Webhook Secret:**
+    -   In the Stripe Dashboard, go to "Developers" -> "Webhooks".
+    -   Create a new endpoint with the URL `http://localhost:3000/api/stripe/webhook`.
+    -   Listen for the `checkout.session.completed` event.
+    -   After creating the endpoint, reveal and copy the "Signing secret".
+    -   Add it to `gp-website/.env`:
+        ```
+        STRIPE_WEBHOOK_SECRET="whsec_..."
+        ```
+
+</rewritten_file> 

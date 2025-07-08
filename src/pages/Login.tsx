@@ -1,59 +1,58 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { authHelpers, authAPI } from '@/lib/api';
 
-interface LoginProps {
-  onLogin: (userData: any) => void;
-}
-
-const api = 'http://localhost:4000';
-
-const Login = ({ onLogin }: LoginProps) => {
+const Login = () => {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     department: '',
     copilotLanguage: '',
-    studyingLanguage: '',
-    role: 'student',
+    aiKnowledgeLevel: 1,
+    role: 'LEARNER',
     name: ''
   });
   const [tab, setTab] = useState<'signin' | 'signup'>('signin');
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (authHelpers.isAuthenticated()) {
+      navigate('/dashboard');
+    }
+  }, [navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setLoading(true);
+
     try {
       if (tab === 'signup') {
-        const res = await fetch(`${api}/users`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData)
-        });
-        if (!res.ok) throw new Error('Signup failed');
-        const user = await res.json();
-        onLogin(user);
+        const { token, user } = await authAPI.register(formData);
+        authHelpers.setAuthData(token, user);
+        navigate('/dashboard');
       } else {
-        const res = await fetch(`${api}/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: formData.email, password: formData.password })
-        });
-        if (!res.ok) throw new Error('Login failed');
-        const user = await res.json();
-        onLogin(user);
+        const { token, user } = await authAPI.login(formData.email, formData.password);
+        authHelpers.setAuthData(token, user);
+        navigate('/dashboard');
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred');
+      setError(err.response?.data?.message || 'שגיאה בהתחברות');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleInputChange = (field: string, value: string) => {
+  const handleInputChange = (field: string, value: string | number) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -70,13 +69,15 @@ const Login = ({ onLogin }: LoginProps) => {
           filter: 'brightness(1.2)'
         }}
       />
-      {/* Content Container - Now with relative positioning to appear above background */}
+      
+      {/* Content Container */}
       <div className="relative z-10 flex w-full md:w-1/2 justify-center items-center min-h-[50vh] md:min-h-screen">
         <div className="w-full max-w-md">
           <Card className="w-full max-w-md shadow-xl">
             <CardHeader className="text-center">
-              <CardTitle className="text-2xl font-bold bg-gradient-to-r from-[#00A3D5] to-[#00C49A] bg-clip-text text-transparent">Copilot Inside</CardTitle>
-              {/* <p className="text-gray-600">התחברות למערכת הלמידה</p> */}
+              <CardTitle className="text-2xl font-bold bg-gradient-to-r from-[#00A3D5] to-[#00C49A] bg-clip-text text-transparent">
+                Copilot Inside
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <Tabs defaultValue="signin" value={tab} onValueChange={v => setTab(v as any)} className="w-full">
@@ -84,7 +85,13 @@ const Login = ({ onLogin }: LoginProps) => {
                   <TabsTrigger value="signup">הרשמה</TabsTrigger>
                   <TabsTrigger value="signin">התחברות</TabsTrigger>
                 </TabsList>
-                {error && <div className="text-red-500 text-center mb-2">{error}</div>}
+                
+                {error && (
+                  <div className="text-red-500 text-center mb-4 p-2 bg-red-50 rounded">
+                    {error}
+                  </div>
+                )}
+                
                 <TabsContent value="signup">
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2 text-right">
@@ -96,8 +103,10 @@ const Login = ({ onLogin }: LoginProps) => {
                         onChange={(e) => handleInputChange('email', e.target.value)}
                         required
                         className="text-right"
+                        disabled={loading}
                       />
                     </div>
+                    
                     <div className="space-y-2 text-right">
                       <Label htmlFor="signup-password">סיסמה</Label>
                       <Input
@@ -107,8 +116,10 @@ const Login = ({ onLogin }: LoginProps) => {
                         onChange={(e) => handleInputChange('password', e.target.value)}
                         required
                         className="text-right"
+                        disabled={loading}
                       />
                     </div>
+                    
                     <div className="space-y-2 text-right">
                       <Label htmlFor="name">שם</Label>
                       <Input
@@ -118,25 +129,31 @@ const Login = ({ onLogin }: LoginProps) => {
                         onChange={(e) => handleInputChange('name', e.target.value)}
                         required
                         className="text-right"
+                        disabled={loading}
                       />
                     </div>
+                    
                     <div className="space-y-2 text-right">
                       <Label htmlFor="department">מחלקה</Label>
-                      <Select onValueChange={(value) => handleInputChange('department', value)}>
+                      <Select onValueChange={(value) => handleInputChange('department', value)} disabled={loading}>
                         <SelectTrigger className="text-right">
                           <SelectValue placeholder="בחר מחלקה" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="development">פיתוח</SelectItem>
-                          <SelectItem value="digital">מנהלים</SelectItem>
-                          <SelectItem value="finance">דיגיטל</SelectItem>
+                          <SelectItem value="management">מנהלים</SelectItem>
+                          <SelectItem value="digital">דיגיטל</SelectItem>
+                          <SelectItem value="finance">כספים</SelectItem>
+                          <SelectItem value="marketing">שיווק</SelectItem>
+                          <SelectItem value="hr">משאבי אנוש</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
+                    
                     <div className="flex gap-4">
-                      <div className="flex-1 space-y-2 text-right dir-rtl">
-                        <Label htmlFor="copilot-language">הקופיילוט שלך ב</Label>
-                        <Select onValueChange={(value) => handleInputChange('copilotLanguage', value)}>
+                      <div className="flex-1 space-y-2 text-right">
+                        <Label htmlFor="copilot-language">שפת Copilot</Label>
+                        <Select onValueChange={(value) => handleInputChange('copilotLanguage', value)} disabled={loading}>
                           <SelectTrigger className="text-right">
                             <SelectValue placeholder="בחר שפה" />
                           </SelectTrigger>
@@ -146,26 +163,34 @@ const Login = ({ onLogin }: LoginProps) => {
                           </SelectContent>
                         </Select>
                       </div>
+                      
                       <div className="flex-1 space-y-2 text-right">
-                        <Label htmlFor="studying-language">שפת לימוד</Label>
-                        <Select onValueChange={(value) => handleInputChange('studyingLanguage', value)}>
+                        <Label htmlFor="ai-knowledge">רמת ידע ב-AI</Label>
+                        <Select onValueChange={(value) => handleInputChange('aiKnowledgeLevel', parseInt(value))} disabled={loading}>
                           <SelectTrigger className="text-right">
-                            <SelectValue placeholder="בחר שפה" />
+                            <SelectValue placeholder="בחר רמה" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="hebrew">עברית</SelectItem>
-                            <SelectItem value="english">אנגלית</SelectItem>
+                            <SelectItem value="1">מתחיל</SelectItem>
+                            <SelectItem value="2">בינוני</SelectItem>
+                            <SelectItem value="3">מתקדם</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                     </div>
+                    
                     <div className="flex justify-center">
-                      <Button type="submit" className="w-[60%] bg-blue-600 hover:bg-blue-700">
-                        הירשם
+                      <Button 
+                        type="submit" 
+                        className="w-[60%] bg-blue-600 hover:bg-blue-700"
+                        disabled={loading}
+                      >
+                        {loading ? 'נרשם...' : 'הירשם'}
                       </Button>
                     </div>
                   </form>
                 </TabsContent>
+                
                 <TabsContent value="signin">
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2 text-right">
@@ -177,8 +202,10 @@ const Login = ({ onLogin }: LoginProps) => {
                         onChange={(e) => handleInputChange('email', e.target.value)}
                         required
                         className="text-right"
+                        disabled={loading}
                       />
                     </div>
+                    
                     <div className="space-y-2 text-right">
                       <Label htmlFor="password">סיסמה</Label>
                       <Input
@@ -188,11 +215,17 @@ const Login = ({ onLogin }: LoginProps) => {
                         onChange={(e) => handleInputChange('password', e.target.value)}
                         required
                         className="text-right"
+                        disabled={loading}
                       />
                     </div>
+                    
                     <div className="flex justify-center">
-                      <Button type="submit" className="w-[60%] bg-blue-600 hover:bg-blue-700">
-                        התחבר
+                      <Button 
+                        type="submit" 
+                        className="w-[60%] bg-blue-600 hover:bg-blue-700"
+                        disabled={loading}
+                      >
+                        {loading ? 'מתחבר...' : 'התחבר'}
                       </Button>
                     </div>
                   </form>
@@ -202,7 +235,8 @@ const Login = ({ onLogin }: LoginProps) => {
           </Card>
         </div>
       </div>
-      {/* Right Side - Image as background, 50% width */}
+      
+      {/* Right Side - Logo */}
       <div className="relative z-10 w-full md:w-1/2 h-[40vh] md:h-screen flex items-center justify-center">
         <img
           src="/squarelogo.png"

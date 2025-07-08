@@ -1,0 +1,120 @@
+Golden Protect - Software Design Document
+Version: 1.2
+Date: June 17, 2024
+Author: Gemini
+
+1. Vision & Guiding Principles
+1.1. Project Vision
+To create a secure, simple, and stress-free computing environment for elderly users. The Golden Protect software will act as a protective "shell" over the host operating system, replacing the complex desktop environment with a simple, locked-down interface that provides easy access to a curated list of essential websites.
+
+1.2. Guiding Principles
+Simplicity First: Every feature must be intuitive and require minimal cognitive load.
+
+Safety & Security: The user must be prevented from accidentally accessing system settings or unapproved web content.
+
+Caregiver Empowerment: A designated caregiver must have simple, password-protected control over the user's experience.
+
+2. System Architecture & Technology Stack
+2.1. Client Application (The "Shell")
+The primary application will be a desktop program built with Electron.js. Electron will provide the native window, full-screen kiosk mode, auto-start functionality, and the crucial <webview> tag for displaying websites. The user interface within Electron will be built as a modern web application (using React or Vue.js).
+
+2.2. Backend Service (NEW)
+A lightweight, separate backend service (e.g., running on Node.js with Express) will handle logic that cannot or should not be run on the client.
+
+Responsibilities:
+
+SMS Password Reminders: It will receive requests from the client, process them, and communicate with an SMS Gateway API to send the password. This keeps API keys secure on the server.
+
+Weather Data: It will periodically fetch weather data from a third-party weather API, cache it, and serve it to clients on request. This reduces API calls and centralizes the key.
+
+Technology: Node.js with a simple framework like Express.js is recommended.
+
+2.3. Third-Party Services
+Weather API: Used by the backend to fetch local weather data.
+
+SMS Gateway API (e.g., Twilio): Used by the backend to send password reminders.
+
+3. User Experience (UX) & Feature Breakdown
+3.1. The Main "Home" Screen
+This is the default view the user sees upon startup. It must be clean, legible, and calm.
+
+Layout: A clean, high-contrast screen.
+
+Elements:
+
+Digital Clock: A large, easy-to-read clock (e.g., 10:52 AM).
+
+Date Display: The full date (e.g., Monday, June 17).
+
+Local Weather: A simple icon (sun, clouds, rain) and the current temperature.
+
+Application Grid: A grid of large, clickable buttons representing pre-approved websites.
+
+Footer: A small, unobtrusive text hint: "Press the 'ESC' key for options."
+
+3.2. Launching and Viewing a Website
+Action: User clicks on an application button (e.g., "Facebook").
+
+Result:
+
+A new view appears containing a full-screen <webview> element that loads the selected website.
+
+A large, unmistakable "Close" button is always visible in a corner.
+
+Behavior:
+
+The user interacts with the website as normal. The zoom level is controlled by the caregiver's settings.
+
+State Persistence: When the user clicks the "Close" button, the <webview> is hidden, not destroyed. If the user clicks the same application button again, the hidden <webview> is shown, preserving their session, what they were doing, and their scroll position.
+
+3.3. Exiting a Website View
+Action: User clicks the "Close" button.
+
+Result: The website view is hidden, and the user is immediately returned to the Main "Home" Screen.
+
+3.4. Accessing the Options Menu
+Action: User (or caregiver) presses the ESC key.
+
+Result: A password prompt modal appears.
+
+Logic:
+
+3 incorrect password attempts automatically closes the window.
+
+Offline Functionality: If the application detects there is no internet connection, a "Network Settings" button will appear in this window. After the correct password is entered, clicking this button will open the computer's native Wi-Fi / Network settings panel, allowing the caregiver to troubleshoot connectivity.
+
+3.5. Caregiver Settings Screen
+This screen is only accessible after successfully entering the password. It includes controls for:
+
+Managing the list of approved websites.
+
+Setting the caregiver's mobile number for password recovery.
+
+Changing the password.
+
+Adjusting accessibility settings: Interface Text Size, Interface Icon Size, and Web Page Zoom.
+
+3.6. Error Handling
+Scenario: Internet is disconnected, or a website fails to load.
+
+Result: A custom, friendly error screen is displayed with a "Go Back" button.
+
+4. Non-Functional Requirements
+4.1. Auto-Start on Login
+The application must be configured to launch automatically when the user logs into their account.
+
+4.2. Full-Screen and Kiosk Mode
+The application must launch in full-screen (kiosk) mode, without standard window borders, covering the OS taskbar/dock.
+
+4.3. Password Security & Recovery
+The caregiver password will be stored as plaintext in a local configuration file on the client computer to facilitate easy recovery.
+
+Reminder Logic:
+
+Caregiver clicks "Forgot Password?".
+
+The client application sends a request to the backend service.
+
+The backend service uses the SMS Gateway to send the stored password to the caregiver's registered phone number.
+
+Security Trade-off: This prioritizes ease of recovery for the caregiver over robust password security, which is deemed an acceptable risk for this application's scope.

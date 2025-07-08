@@ -1,0 +1,10 @@
+7. Config_Tasks.mdVersion: 1.0Date: July 9, 20241. Local Development Environment (.env file)Create a file named .env in the root of the /server directory with the following variables.# This is used by Prisma to connect to your local SQLite database.
+# No changes are needed here if you're using the default setup.
+DATABASE_URL="file:./dev.db"
+
+# A secret key for signing JWTs. Can be any long, random string.
+JWT_SECRET="a-very-long-and-super-secret-string-for-jwt-tokens"
+
+# Your OpenAI API Key
+OPENAI_API_KEY="sk-..."
+2. Third-Party Service SetupOpenAI API (for AI Feedback)Sign up for an OpenAI account at https://platform.openai.com/.Navigate to the "API keys" section in your account settings.Create a new secret key.Copy the key and paste it as the value for OPENAI_API_KEY in your /server/.env file.Vimeo (for Video Hosting)Upload your video content to your Vimeo account.For each video, go to its settings page.Under the "Embed" tab, get the embeddable URL (e.g., https://player.vimeo.com/video/YOUR_VIDEO_ID).This URL will be stored in the defaultContent JSON of the screen_components table for VIDEO type steps.Important: Under the "Privacy" settings for each video, ensure you have configured domain-level privacy to only allow embedding on localhost:5173 (or your local development port) for development.3. Running the Local SystemStart the Backend:Navigate to the /server directory.Run npm install.Run npm run dev.The backend API will be running on http://localhost:4000.Start the Frontend:In a separate terminal, navigate to the root directory of the project.Run npm install.Run npm run dev.The frontend application will be available at http://localhost:5173.

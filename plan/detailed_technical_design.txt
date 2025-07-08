@@ -1,0 +1,252 @@
+# 4. Detailed_Technical_Design.md
+**Version: 1.1**
+**Date: July 9, 2024**
+
+## 1. Directory Tree
+This structure is mandatory to ensure consistency and maintainability.
+
+### Frontend (`/`)
+/├── public/│   └── icons/│       ├── word.svg│       └── excel.svg├── src/│   ├── components/│   │   ├── ui/                 # Reusable UI components from shadcn│   │   └── common/│   │       ├── Header.tsx│   │       ├── LoadingSpinner.tsx│   │       └── SiteChatbot.tsx│   ├── features/│   │   ├── Authentication/│   │   │   ├── components/│   │   │   │   └── LoginForm.tsx│   │   │   └── routes/│   │   │       └── LoginPage.tsx│   │   ├── Dashboard/│   │   │   └── routes/│   │   │       └── DashboardPage.tsx│   │   ├── ModuleView/│   │   │   ├── components/│   │   │   │   ├── ModuleSidebar.tsx│   │   │   │   ├── StepContainer.tsx│   │   │   │   └── ScreenContainer.tsx│   │   │   ├── hooks/│   │   │   │   └── useModuleData.ts│   │   │   └── routes/│   │   │       └── ModulePage.tsx│   │   └── Tasks/│   │       ├── components/│   │       │   ├── Instructions.tsx│   │       │   ├── ImageDisplay.tsx│   │       │   ├── QuestionMultiChoice.tsx│   │       │   └── QuestionOpen.tsx│   │       └── index.ts│   ├── lib/│   │   ├── api.ts              # Central API client (e.g., axios instance)│   │   └── utils.ts│   ├── contexts/│   │   └── AnalyticsProvider.tsx # Context for logging events│   └── main.tsx├── package.json├── tsconfig.json└── vite.config.ts
+### Backend (`/server`)
+server/├── src/│   ├── main.ts               # Server entry point│   ├── app.module.ts         # Root NestJS module│   ├── auth/│   │   ├── auth.module.ts│   │   ├── auth.controller.ts│   │   └── jwt.strategy.ts│   ├── users/│   │   ├── users.module.ts│   │   └── users.service.ts│   ├── content/│   │   ├── content.module.ts│   │   ├── content.controller.ts│   │   └── services/│   │       ├── content.service.ts│   │       └── variant-resolution.service.ts│   ├── analytics/│   │   ├── analytics.module.ts│   │   └── analytics.controller.ts # Handles POST /events│   └── prisma/│       ├── schema.prisma│       └── migrations/└── package.json
+## 2. Naming Conventions
+* **Files:** `PascalCase.tsx` for React components, `camelCase.ts` for other modules.
+* **React Components:** `PascalCase`, e.g., `ModuleSidebar`.
+* **Environment Variables:** `SCREAMING_SNAKE_CASE`, e.g., `DATABASE_URL`.
+* **Database Tables & Columns:** `snake_case`, e.g., `task_screens`, `user_id`.
+* **API Endpoints:** `kebab-case` for paths, e.g., `/api/v1/content-modules/{moduleId}`.
+
+## 3. Final Prisma Schema (`/server/prisma/schema.prisma`)
+This is the complete schema required for the full system.
+
+```prisma
+// This is your Prisma schema file,
+// learn more about it in the docs: [https://pris.ly/d/prisma-schema](https://pris.ly/d/prisma-schema)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  name              String?
+  password          String // In a real app, this should be a hash
+  role              String    @default("LEARNER") // LEARNER, AUTHOR, MANAGER
+  department        String?
+  copilotLanguage   String?
+  aiKnowledgeLevel  Int       @default(1)
+  createdAt         DateTime  @default(now())
+
+  // Relations
+  progress          UserProgress[]
+  submissions       TaskSubmission[]
+  conversations     Conversation[]
+  events            UserEvent[]
+}
+
+model Module {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?
+  iconPath    String?  // e.g., '/icons/word.svg'
+  createdAt   DateTime @default(now())
+
+  // Relations
+  steps       Step[]
+}
+
+model Step {
+  id          Int      @id @default(autoincrement())
+  moduleId    Int
+  order       Int
+  title       String
+  type        String   // VIDEO, ORIENTATION, SKILL, HANDSON, CHAT, CONCLUSION
+  createdAt   DateTime @default(now())
+
+  // Relations
+  module      Module        @relation(fields: [moduleId], references: [id])
+  screens     TaskScreen[]
+  submissions TaskSubmission[]
+}
+
+model TaskScreen {
+  id        Int      @id @default(autoincrement())
+  stepId    Int
+  order     Int
+  createdAt DateTime @default(now())
+
+  // Relations
+  step      Step                @relation(fields: [stepId], references: [id])
+  components ScreenComponent[]
+}
+
+model ScreenComponent {
+  id             Int      @id @default(autoincrement())
+  screenId       Int
+  componentType  String   // INSTRUCTIONS, IMAGE_DISPLAY, QUESTION_MULTICHOICE, etc.
+  slot           String   // top_panel, main_content, etc.
+  defaultContent Json     // The default content for this component
+
+  // Relations
+  screen        TaskScreen         @relation(fields: [screenId], references: [id])
+  variants      ComponentVariant[]
+}
+
+model ComponentVariant {
+  id                Int     @id @default(autoincrement())
+  componentId       Int
+  variantContent    Json    // The overriding content for this variant
+
+  // Targeting attributes
+  targetRole            String?
+  targetAiKnowledgeLevel Int?
+  targetCopilotLanguage String?
+
+  // Relations
+  component ScreenComponent @relation(fields: [componentId], references: [id])
+
+  @@unique([componentId, targetRole, targetAiKnowledgeLevel, targetCopilotLanguage])
+}
+
+model UserProgress {
+  id         Int      @id @default(autoincrement())
+  userId     String
+  stepId     Int
+  status     String   // NOT_STARTED, IN_PROGRESS, COMPLETED
+  progressPercent Int @default(0)
+  lastScreen Int      @default(1)
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, stepId])
+}
+
+model TaskSubmission {
+  id           Int      @id @default(autoincrement())
+  userId       String
+  stepId       Int
+  submittedAt  DateTime @default(now())
+  content      Json
+  aiFeedback   Json?
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+  step Step @relation(fields: [stepId], references: [id])
+}
+
+model Conversation {
+  id        Int       @id @default(autoincrement())
+  userId    String
+  stepId    Int?
+  createdAt DateTime  @default(now())
+
+  // Relations
+  user      User      @relation(fields: [userId], references: [id])
+  messages  ConversationMessage[]
+}
+
+model ConversationMessage {
+  id             Int      @id @default(autoincrement())
+  conversationId Int
+  sender         String   // USER or AI
+  content        String
+  timestamp      DateTime @default(now())
+
+  // Relations
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+}
+
+model UserEvent {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  moduleId  Int
+  stepId    Int
+  screenId  Int?
+  eventType String
+  eventData Json?
+  timestamp DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+}
+4. API Response Contract (View Model)The API for GET /api/v1/steps/{stepId} must return a JSON object with this structure:{
+  "stepId": 101,
+  "type": "SKILL",
+  "header": "Task: Improving a Prompt",
+  "screens": [
+    {
+      "screenId": 201,
+      "order": 1,
+      "components": [
+        {
+          "componentId": 301,
+          "type": "INSTRUCTIONS",
+          "slot": "top_panel",
+          "content": {
+            "text": "First, select the missing elements from the prompt below."
+          }
+        },
+        {
+          "componentId": 302,
+          "type": "QUESTION_MULTICHOICE",
+          "slot": "main_content",
+          "content": {
+            "questionText": "Which elements are missing?",
+            "options": ["Context", "Goal", "Role", "Motivation"]
+          }
+        }
+      ]
+    }
+  ]
+}
+5. Code & Config SnippetsESLint (.eslintrc.cjs)module.exports = {
+  root: true,
+  env: { browser: true, es2020: true },
+  extends: [
+    'eslint:recommended',
+    'plugin:@typescript-eslint/recommended',
+    'plugin:react-hooks/recommended',
+  ],
+  ignorePatterns: ['dist', '.eslintrc.cjs'],
+  parser: '@typescript-eslint/parser',
+  plugins: ['react-refresh'],
+  rules: {
+    'react-refresh/only-export-components': [
+      'warn',
+      { allowConstantExport: true },
+    ],
+  },
+}
+TypeScript (tsconfig.json){
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}
+6. Performance & CachingPerformance Budgets:Largest Contentful Paint (LCP): < 2.5sInteraction to Next Paint (INP): < 200msFrontend JS bundle size (main chunk): < 250KB gzipped.Caching Strategy:Frontend: Static assets (JS, CSS) will be cached aggressively using hashed filenames. API responses for module data will be cached in-memory client-side for the duration of a session.Backend: In a production environment, Redis will be used to cache heavily accessed, non-personalized data, such as the list of available modules.Monitoring & Logging:Frontend: Sentry for error tracking.Backend: For local development, use console logging.

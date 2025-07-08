@@ -1,0 +1,130 @@
+Golden Protect - Development Task List & Execution Plan
+Objective: To provide a clear, sequential, and unambiguous set of tasks for the development of the Golden Protect application. This plan must be followed in the specified order. Refer to the "Golden Protect - Executive Technical Blueprint (v1.1)" for all code snippets and detailed architectural specifications.
+
+Phase 1: Project Setup & Environment Configuration
+This phase establishes the foundational structure for both the client and backend projects.
+
+Task 1.1: Initialize Projects
+Subtask 1.1.1: Create a main project directory named golden-protect.
+
+Subtask 1.1.2: Inside golden-protect, create a directory named client.
+
+Subtask 1.1.3: Inside golden-protect, create a directory named backend.
+
+Subtask 1.1.4: In the client directory, initialize a new Electron + React project using a modern Vite-based boilerplate.
+
+Subtask 1.1.5: In the backend directory, run npm init -y to create a package.json file.
+
+Subtask 1.1.6: In the backend directory, install Express.js by running npm install express. Install nodemon as a dev dependency (npm install --save-dev nodemon) and add a "start": "nodemon server.js" script to your package.json.
+
+Task 1.2: Configure ESLint
+Subtask 1.2.1: In both the client and backend directories, install all required ESLint dependencies for the Airbnb config (eslint, eslint-plugin-react, eslint-plugin-react-hooks, eslint-config-airbnb, eslint-plugin-import, eslint-plugin-jsx-a11y).
+
+Subtask 1.2.2: In the root of both the client and backend directories, create a .eslintrc.json file.
+
+Subtask 1.2.3: Copy the exact ESLint configuration from Section 2.1 of the Technical Blueprint into both .eslintrc.json files.
+
+Subtask 1.2.4: Run npx eslint . in both directories to ensure the initial boilerplate code is free of linting errors. Fix any reported issues.
+
+Phase 2: Backend Foundation (API Scaffolding)
+This phase creates the skeleton of the backend API. It will not have real logic yet, but it will be functional.
+
+Task 2.1: Create Backend Folder Structure
+Subtask 2.1.1: In the backend directory, create the following subdirectories: controllers, routes, services, middleware.
+
+Subtask 2.1.2: In the backend/middleware directory, create an empty file named errorHandler.js. (Note: You will implement this later, but creating the file now ensures structural consistency).
+
+Task 2.2: Implement Server and Router
+Subtask 2.2.1: Create backend/server.js. This file will initialize the Express app, apply middleware (cors, express.json()), and start the server. It must import and use the main router from routes/index.js.
+
+Subtask 2.2.2: Create backend/routes/index.js. This file will define the GET /api/weather and POST /api/sms-reminder routes and connect them to controller functions.
+
+Subtask 2.2.3: Create backend/controllers/weatherController.js and backend/controllers/smsController.js.
+
+Task 2.3: Implement "Dummy" Controllers
+Subtask 2.3.1: In weatherController.js, create a function getWeather(req, res, next). This function should, for now, simply send a hard-coded JSON success response: { "temperature": 18, "condition": "Sunny", "icon": "sun" }.
+
+Subtask 2.3.2: In smsController.js, create a function sendReminder(req, res, next). This function should log the request body to the console (console.log(req.body)) and then send a hard-coded JSON success response: { "message": "Dummy success: SMS request received." }.
+
+Subtask 2.3.3: Use Postman or a similar API client to make requests to your running backend. Verify that GET http://localhost:PORT/api/weather and POST http://localhost:PORT/api/sms-reminder both return the correct 200 OK responses.
+
+Phase 3: Client Foundation (IPC & Configuration)
+This phase establishes the core communication bridge between the Electron main process and the React UI.
+
+Task 3.1: Implement IPC Bridge
+Subtask 3.1.1: Create the src/renderer/constants/channels.js file and copy the CHANNELS constant object from Section 4.2 of the Technical Blueprint.
+
+Subtask 3.1.2: Open the src/main/preload.js file. Copy the exact contextBridge.exposeInMainWorld code from Section 4.2 of the Technical Blueprint.
+
+Task 3.2: Implement Main Process Logic
+Subtask 3.2.1: Open the src/main/main.js file. Import ipcMain, shell, app, path, and fs.
+
+Subtask 3.2.2: Create the config.template.json file in the root of the client directory (i.e., at client/config.template.json). Copy the JSON structure from Section 2.3 of the Technical Blueprint into this file.
+
+Subtask 3.2.3: Implement the ipcMain.handle(CHANNELS.LOAD_CONFIG) logic exactly as described in Section 4.5 of the Technical Blueprint. (Note: Ensure the path to the template file is correctly resolved from the project root, not the src directory, to match Subtask 3.2.2).
+
+Subtask 3.2.4: Implement the ipcMain.on(CHANNELS.SAVE_CONFIG, ...) logic exactly as described in Section 4.5.
+
+Task 3.3: Implement Global State Context
+Subtask 3.3.1: Create the file src/renderer/contexts/AppContext.js.
+
+Subtask 3.3.2: Copy the entire contents of the AppContext.js example from Section 4.3 of the Technical Blueprint into this file. This includes the ActionTypes, initialState, appReducer, AppProvider, and useAppContext.
+
+Phase 4: UI Component Implementation (Static)
+This phase focuses on building the visual components of the application with static, placeholder data. Do not connect to context or APIs yet.
+
+Subtask 4.1.1: Create a file for each UI component specified in the src/renderer/components/ directory: <Header.js>, <Clock.js>, <DateDisplay.js>, <WeatherWidget.js>, <AppGrid.js>, <AppButton.js>, and <PasswordModal.js>.
+
+Subtask 4.1.2: Create a file for each screen component in src/renderer/screens/ (<HomeScreen.js>, <SettingsScreen.js>, <WebviewScreen.js>).
+
+Subtask 4.1.3: Build each component using JSX and Tailwind CSS to match the visual design. Use hard-coded data for now (e.g., display a static time in <Clock>, manually create an array of app objects to pass to <AppGrid>).
+
+Subtask 4.1.4: Compose the <HomeScreen> by assembling the <Header> (which contains Clock, Date, Weather) and <AppGrid> components.
+
+Phase 5: State Integration & UI Logic
+This phase breathes life into the static UI by connecting it to the global state context.
+
+Subtask 5.1.1: In src/renderer/App.js, wrap the application's JSX in the <AppProvider>.
+
+Subtask 5.1.2: In App.js, implement the useEffect hook to load the initial configuration using window.electronAPI.loadConfig() and dispatch the SET_CONFIG action, as described in Section 4.4 of the Technical Blueprint. Log the config to the console to verify it works.
+
+Subtask 5.1.3: Refactor each component that needs dynamic data (e.g., <AppGrid>, <WeatherWidget>) to use the useAppContext() hook to get the state.
+
+Subtask 5.1.4: The UI should now render dynamically based on the contents of your config.json file.
+
+Subtask 5.1.5: Implement the view-switching logic in App.js. Render <HomeScreen> or <SettingsScreen> based on state.currentView. Create functions that dispatch SET_CURRENT_VIEW to change the view.
+
+Subtask 5.1.6: Implement the <WebviewScreen> logic as detailed in Section 4.4 of the Technical Blueprint. The onClick handler for <AppButton> should dispatch the SET_ACTIVE_WEBVIEW action with the appropriate app ID.
+
+Phase 6: Backend Service Implementation (Live APIs)
+This phase replaces the dummy backend logic with real API calls.
+
+Subtask 6.1.1: Create the backend/services/weatherService.js and backend/services/smsService.js files.
+
+Subtask 6.1.2: In weatherService.js, implement a function that uses axios (or another HTTP client) to call a real weather API.
+
+Subtask 6.1.3: In smsService.js, implement the sendPasswordSms function. (Note: You must use the exact function signature defined in Section 5.2 of the Technical Blueprint).
+
+Subtask 6.1.4: Update the controller files (weatherController.js, smsController.js) to import and call these new service functions instead of returning hard-coded data. They must use try...catch blocks and pass errors to next().
+
+Phase 7: Client-Backend Integration
+This phase connects the client application to the live backend API.
+
+Subtask 7.1.1: Create the src/renderer/utils/apiClient.js file. This module will export functions for making API calls (e.g., getWeather(lat, lon), sendSmsReminder(payload)). Use axios or fetch.
+
+Subtask 7.1.2: Refactor the <WeatherWidget> component to call apiClient.getWeather() instead of displaying static data.
+
+Subtask 7.1.3: Implement the "Forgot Password?" functionality within the <PasswordModal> to call apiClient.sendSmsReminder() with the required data from the configuration context.
+
+Phase 8: Final Features & Polish
+This phase completes the application by implementing the remaining features and ensuring stability.
+
+Subtask 8.1.1: Fully implement the <SettingsScreen> component. It should allow the user to modify a local copy of the configuration state.
+
+Subtask 8.1.2: Implement the "Save" button logic in <SettingsScreen>. On click, it must call window.electronAPI.saveConfig(updatedConfig).
+
+Subtask 8.1.3: Implement the remaining IPC handlers in main.js: open-network-settings and app-quit. Connect them to the appropriate buttons in the UI.
+
+Subtask 8.1.4: Install and configure the auto-launch npm package in the client project as specified in the Technical Blueprint.
+
+Subtask 8.1.5: Conduct a final round of testing on all application features. Check for console errors and linting issues one last time.

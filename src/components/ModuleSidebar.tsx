@@ -2,89 +2,91 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Progress, CircularProgress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronUp, PlayCircle, CheckCircle2, Activity, BookOpenCheck, Dumbbell } from 'lucide-react';
+import { ChevronDown, ChevronUp, PlayCircle, CheckCircle2, Activity, BookOpenCheck, Dumbbell, FileText } from 'lucide-react';
+import { useUserProgress } from '@/hooks/useModuleData';
 
-interface UserProgress {
-  lessonId: string;
-  percent: number;
-  lastActivity?: string;
-  lastStep?: number;
-  activityProgress?: Record<string, boolean | number[]>;
-}
-
-interface Activity {
-  id: string;
+interface Step {
+  id: number;
   title: string;
-  completed: boolean;
-}
-
-interface Lesson {
-  id: string;
-  title: string;
-  video: string;
-  videoTitle: string;
-  activities: Activity[];
-  sidebarTitle?: string;
+  type: string;
+  order: number;
 }
 
 interface Module {
+  id: number;
   title: string;
-  lessons: Lesson[];
+  description?: string;
+  iconPath?: string;
+  steps: Step[];
 }
 
 interface SidebarProps {
   currentModule: Module;
-  userProgress: UserProgress[];
-  currentLessonId: string;
-  currentActivityId: string;
-  onActivitySelect: (lessonId: string, activityId: string) => void;
+  currentStepId: number;
+  onStepSelect: (stepId: number) => void;
 }
 
 const ModuleSidebar = ({ 
   currentModule, 
-  userProgress, 
-  currentLessonId, 
-  currentActivityId, 
-  onActivitySelect 
+  currentStepId, 
+  onStepSelect 
 }: SidebarProps) => {
-  const [expandedLesson, setExpandedLesson] = useState(currentLessonId);
+  const { progress } = useUserProgress();
 
-  useEffect(() => {
-    setExpandedLesson(currentLessonId);
-  }, [currentLessonId]);
+  const getStepProgress = (stepId: number) => {
+    const stepProgress = progress.find(p => p.stepId === stepId);
+    return stepProgress?.progressPercent || 0;
+  };
 
-  const getActivityProgress = (lessonId: string, activityId: string) => {
-    const progressObj = userProgress.find((p) => p.lessonId === lessonId);
-    const activityProgress = progressObj?.activityProgress || {};
-    if (activityId === 'video') return activityProgress['video'] ? 100 : 0;
-    if (activityId === 'tutor') {
-      const steps = Array.isArray(activityProgress['tutor']) ? activityProgress['tutor'].length : 0;
-      return steps >= 6 ? 100 : Math.round((steps / 6) * 100);
-    }
-    if (activityId === 'prompt') return activityProgress['prompt'] ? 100 : 0;
-    if (activityId === 'file') {
-      const cards = Array.isArray(activityProgress['file']) ? activityProgress['file'].length : 0;
-      return cards >= 4 ? 100 : Math.round((cards / 4) * 100);
-    }
-    if (activityId === 'conclusion') return activityProgress['conclusion'] ? 100 : 0;
-    return 0;
+  const isStepCompleted = (stepId: number) => {
+    const stepProgress = progress.find(p => p.stepId === stepId);
+    return stepProgress?.status === 'COMPLETED';
   };
 
   const getModuleProgress = () => {
-    if (!userProgress.length) return 0;
-    const totalLessons = currentModule.lessons.length;
-    const total = userProgress.reduce((sum, p) => sum + (p.percent || 0), 0);
-    return Math.round((total / (totalLessons * 100)) * 100);
+    if (!currentModule.steps.length) return 0;
+    const totalProgress = currentModule.steps.reduce((sum, step) => {
+      return sum + getStepProgress(step.id);
+    }, 0);
+    return Math.round(totalProgress / currentModule.steps.length);
   };
 
-  const handleLessonHeaderClick = (lessonId: string, event: React.MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setExpandedLesson(expandedLesson === lessonId ? '' : lessonId);
+  const getStepIcon = (stepType: string) => {
+    switch (stepType) {
+      case 'VIDEO':
+        return PlayCircle;
+      case 'ORIENTATION':
+        return Activity;
+      case 'SKILL':
+        return Dumbbell;
+      case 'HANDSON':
+        return FileText;
+      case 'CHAT':
+        return Activity;
+      case 'CONCLUSION':
+        return BookOpenCheck;
+      default:
+        return Activity;
+    }
   };
 
-  const handleActivityClick = (lessonId: string, activityId: string) => {
-    onActivitySelect(lessonId, activityId);
+  const getStepTypeLabel = (stepType: string) => {
+    switch (stepType) {
+      case 'VIDEO':
+        return 'וידאו';
+      case 'ORIENTATION':
+        return 'היכרות';
+      case 'SKILL':
+        return 'מיומנות';
+      case 'HANDSON':
+        return 'תרגול';
+      case 'CHAT':
+        return 'צ\'אט';
+      case 'CONCLUSION':
+        return 'סיכום';
+      default:
+        return 'פעילות';
+    }
   };
 
   return (
@@ -96,8 +98,8 @@ const ModuleSidebar = ({
             <div className="flex flex-row justify-between items-center">
               {/* Right side: title and % */}
               <div className="flex flex-col items-start text-right">
-                <h3 className="text-xl font-bold mb-1 text-white">התקדמות בקורס</h3>
-                <span className="text-sm text-white/90">{Math.round(getModuleProgress())}% הושלם</span>
+                <h3 className="text-xl font-bold mb-1 text-white">התקדמות במודול</h3>
+                <span className="text-sm text-white/90">{getModuleProgress()}% הושלם</span>
               </div>
               {/* Left side: circle */}
               <div className="flex items-center justify-center">
@@ -107,84 +109,68 @@ const ModuleSidebar = ({
           </div>
         </Card>
 
-        {/* Lessons List */}
+        {/* Steps List */}
         <div className="space-y-3">
-          <h4 className="text-lg font-semibold text-dark-gray mb-4">שיעורים</h4>
-          {currentModule.lessons.map((lesson) => (
-            <div key={lesson.id} className="bg-white rounded-2xl shadow-card border-0 overflow-hidden">
-              <Button
-                variant="ghost"
-                className="w-full justify-between p-4 h-auto rounded-2xl hover:bg-light-gray/50 transition-all duration-300"
-                onClick={(event) => handleLessonHeaderClick(lesson.id, event)}
-              >
-                <div className="text-right flex-1">
-                  <div className="font-semibold text-dark-gray">{lesson.sidebarTitle || lesson.title}</div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <div className="text-sm text-medium-gray">
-                      {Math.round(userProgress.find(p => p.lessonId === lesson.id)?.percent ?? 0)}% הושלם
-                    </div>
-                    {userProgress.find(p => p.lessonId === lesson.id)?.percent === 100 && (
-                      <CheckCircle2 className="h-4 w-4 text-green" />
-                    )}
-                  </div>
-                </div>
-                <div className="bg-light-gray rounded-xl p-2">
-                  {expandedLesson === lesson.id ? 
-                    <ChevronUp className="h-4 w-4 text-medium-gray" /> : 
-                    <ChevronDown className="h-4 w-4 text-medium-gray" />
-                  }
-                </div>
-              </Button>
-              
-              {expandedLesson === lesson.id && (
-                <div className="px-4 pb-4 space-y-2">
-                  {lesson.activities.map((activity) => {
-                    const progress = getActivityProgress(lesson.id, activity.id);
-                    const isCompleted = progress === 100;
-                    const isCurrent = currentLessonId === lesson.id && currentActivityId === activity.id;
-                    // Choose icon based on activity type
-                    let IconComponent = null;
-                    if (activity.id === 'video') {
-                      IconComponent = PlayCircle;
-                    } else if (activity.id === 'conclusion') {
-                      IconComponent = BookOpenCheck;
-                    } else if (['tutor', 'prompt', 'file'].includes(activity.id)) {
-                      IconComponent = Dumbbell;
-                    } else {
-                      IconComponent = Activity;
-                    }
+          <h4 className="text-lg font-semibold text-dark-gray mb-4">שלבים</h4>
+          <div className="bg-white rounded-2xl shadow-card border-0 overflow-hidden">
+            <div className="p-4">
+              <div className="font-semibold text-dark-gray mb-3">{currentModule.title}</div>
+              <div className="space-y-2">
+                {currentModule.steps
+                  .sort((a, b) => a.order - b.order)
+                  .map((step) => {
+                    const progress = getStepProgress(step.id);
+                    const isCompleted = isStepCompleted(step.id);
+                    const isCurrent = currentStepId === step.id;
+                    const IconComponent = getStepIcon(step.type);
+                    
                     return (
                       <Button
-                        key={activity.id}
+                        key={step.id}
                         variant="ghost"
                         className={`w-full justify-between p-3 h-auto text-sm rounded-xl transition-all duration-300 ${
                           isCurrent 
                             ? 'bg-gradient-turquoise text-white shadow-soft' 
                             : 'hover:bg-light-gray/70'
                         }`}
-                        onClick={() => handleActivityClick(lesson.id, activity.id)}
+                        onClick={() => onStepSelect(step.id)}
                       >
                         <div className="flex items-center justify-between w-full">
                           <div className="flex items-center gap-2">
                             <span className={isCurrent ? 'text-white' : 'text-dark-gray'}>
-                              {activity.title}
+                              {step.title}
+                            </span>
+                            <span className={`text-xs px-2 py-1 rounded-full ${
+                              isCurrent 
+                                ? 'bg-white/20 text-white' 
+                                : 'bg-light-gray text-medium-gray'
+                            }`}>
+                              {getStepTypeLabel(step.type)}
                             </span>
                             {isCompleted && !isCurrent && (
                               <CheckCircle2 className="h-4 w-4 text-green" />
                             )}
                           </div>
-                          {/* Icon next to the title group, not at the edge */}
+                          {/* Icon next to the title group */}
                           <div className="flex-shrink-0">
                             <IconComponent className={`h-5 w-5 ${isCurrent ? 'text-white' : 'text-medium-gray'}`} />
                           </div>
                         </div>
+                        {/* Progress bar for incomplete steps */}
+                        {!isCompleted && progress > 0 && (
+                          <div className="w-full mt-2">
+                            <Progress 
+                              value={progress} 
+                              className={`h-1 ${isCurrent ? 'bg-white/20' : 'bg-light-gray'}`}
+                            />
+                          </div>
+                        )}
                       </Button>
                     );
                   })}
-                </div>
-              )}
+              </div>
             </div>
-          ))}
+          </div>
         </div>
       </div>
     </div>

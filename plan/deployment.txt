@@ -1,0 +1,59 @@
+8. Deployment_and_Packaging.mdVersion: 1.0Date: July 9, 20241. CI/CD Pipeline (Future Azure Deployment)A workflow file at .github/workflows/deploy.yml will automate deployment to Azure.# .github/workflows/deploy.yml
+name: Deploy to Azure
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    # Frontend Build & Deploy
+    - name: Set up Node.js for Frontend
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    - name: Build Frontend
+      run: |
+        npm install
+        npm run build
+    - name: Deploy Frontend to Azure App Service
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: 'your-frontend-app-service-name'
+        publish-profile: ${{ secrets.AZURE_FRONTEND_PUBLISH_PROFILE }}
+        package: ./dist
+
+    # Backend Build & Deploy
+    - name: Set up Node.js for Backend
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    - name: Build Backend
+      run: |
+        cd server
+        npm install
+        npm run build
+    - name: Deploy Backend to Azure App Service
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: 'your-backend-app-service-name'
+        publish-profile: ${{ secrets.AZURE_BACKEND_PUBLISH_PROFILE }}
+        package: ./server/dist
+Note: Publish profiles are obtained from the Azure App Service deployment center and stored as GitHub secrets.2. Installer/Auto-Update StrategyWeb: As a single-page application (SPA), the platform is accessed via a web browser. No installation is required. Updates are delivered automatically on deployment.PWA (Progressive Web App): Post-MVP, a service worker will be added to the frontend to enable PWA functionality, including offline access to cached content and an "Add to Home Screen" prompt.Desktop: Not applicable.3. Infrastructure-as-Code (Terraform)Infrastructure for the future Azure deployment will be managed via Terraform.Azure Resource Groupresource "azurerm_resource_group" "rg" {
+  name     = "rg-copilot-course-platform"
+  location = "East US"
+}
+Azure App Service Planresource "azurerm_service_plan" "appserviceplan" {
+  name                = "asp-copilot-platform"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  os_type             = "Linux"
+  sku_name            = "B1"
+}
+4. Rollback PlanFor Azure deployments, the primary rollback strategy is to re-run the GitHub Actions workflow, selecting the last known good commit. Using Azure App Service deployment slots for blue-green deployments is the recommended approach for zero-downtime rollbacks.5. SLA & Observability Checklist[✓] Service Level Agreement (SLA): Target 99.9% uptime.[✓] Logging: Implement structured logging (JSON) in the backend.[✓] Monitoring: For local development, monitor console output. For production, use Azure Monitor to track API latency, error rates, and resource usage.[✓] Alerting: In production, configure alerts for critical issues (e.g., 5xx error rate > 1%).[✓] Health Checks: The backend will expose a /health endpoint for monitoring.

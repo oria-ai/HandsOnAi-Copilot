@@ -1,22 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, ArrowLeft, Lock, LockOpen, X } from 'lucide-react';
+import { Plus, ArrowLeft, Lock, LockOpen, X, LogOut } from 'lucide-react';
 import { ChartContainer } from '@/components/ui/chart';
 import * as RechartsPrimitive from 'recharts';
+import { authHelpers } from '@/lib/api';
 
-interface ManagerDashboardProps {
-  userData: {
-    id: string;
-    name: string;
-    role: string;
+const ManagerDashboard = () => {
+  const navigate = useNavigate();
+  const { user } = authHelpers.getAuthData();
+
+  useEffect(() => {
+    if (!authHelpers.isAuthenticated()) {
+      navigate('/login');
+      return;
+    }
+
+    if (user?.role !== 'MANAGER') {
+      navigate('/dashboard');
+      return;
+    }
+  }, [navigate, user]);
+
+  const handleLogout = () => {
+    authHelpers.clearAuthData();
+    navigate('/login');
   };
-  onBack: () => void;
-}
 
-const ManagerDashboard = ({ userData, onBack }: ManagerDashboardProps) => {
+  const handleBack = () => {
+    navigate('/dashboard');
+  };
   const [activeView, setActiveView] = useState('content');
   const [selectedDepartment, setSelectedDepartment] = useState('');
   const [selectedWorker, setSelectedWorker] = useState('');
@@ -345,11 +361,21 @@ const ManagerDashboard = ({ userData, onBack }: ManagerDashboardProps) => {
   return (
     <div className="min-h-screen bg-gray-50" dir="rtl">
       <header className="bg-white shadow-sm border-b px-6 py-4">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={onBack} className="p-2">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-2xl font-bold text-gray-800">פאנל ניהול</h1>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" onClick={handleBack} className="p-2">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <h1 className="text-2xl font-bold text-gray-800">פאנל ניהול</h1>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-gray-600">
+              שלום, {user?.name || 'מנהל'}
+            </div>
+            <Button variant="ghost" onClick={handleLogout} className="p-2">
+              <LogOut className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
       </header>
       <div className="flex">

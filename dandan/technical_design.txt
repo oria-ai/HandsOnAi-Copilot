@@ -1,0 +1,274 @@
+Golden Protect - Technical Design & Implementation Guide
+Document Version: 1.0
+For: Junior Development Team
+From: Senior Product Architecture
+Date: June 17, 2025
+
+1. Introduction & Philosophy
+This document provides the complete technical blueprint for the Golden Protect application. It is intentionally prescriptive to ensure quality, consistency, and maintainability. The developer is expected to follow this guide precisely. Do not deviate from the specified architectures, naming conventions, or folder structures without explicit approval.
+
+Our philosophy is to build two clean, decoupled applications: a robust Electron/React Client that handles the user experience, and a simple Node.js/Express Backend that handles secure, server-side tasks.
+
+2. Core Technologies & Setup
+2.1. Client Application
+Technology: Electron + React.
+
+Boilerplate: Use the electron-react-boilerplate or a similar modern template that pre-configures the Vite/Webpack build process for Electron and React.
+
+Language: JavaScript (ES6+).
+
+Package Manager: npm.
+
+Linting: Mandatory. Configure ESLint with the eslint-config-airbnb ruleset to enforce a high standard of code style. Your code must be free of linting errors before it is considered complete.
+
+2.2. Backend Service
+Technology: Node.js + Express.js.
+
+Language: JavaScript (ES6+).
+
+Package Manager: npm.
+
+Linting: Mandatory. Use the same ESLint + Airbnb configuration as the client.
+
+3. Naming Conventions & Code Style
+Components (React): PascalCase (e.g., <HomeScreen>, <AppButton>).
+
+Files (JavaScript): PascalCase for component files (HomeScreen.js), camelCase for non-component files (apiClient.js, weatherService.js).
+
+Variables & Functions: camelCase (e.g., const configData, function loadConfig()).
+
+Constants: UPPER_SNAKE_CASE (e.g., const API_BASE_URL = '...').
+
+CSS Classes (Tailwind): Follow standard Tailwind utility-first conventions.
+
+Comments: Use JSDoc-style comments for all functions to describe their purpose, parameters, and return values.
+
+/**
+ * Loads the user configuration from the backend.
+ * @param {string} userId - The ID of the user to fetch config for.
+ * @returns {Promise<object|null>} The configuration object or null on error.
+ */
+async function loadUserConfig(userId) {
+  // ... implementation
+}
+
+4. Client-Side Architecture (Electron + React)
+4.1. Project Folder Structure (src)
+The client's src directory must be organized as follows:
+
+src/
+├── main/                  # Main Electron Process Files
+│   ├── main.js            # Entry point for the main process
+│   └── preload.js         # Preload script for secure IPC
+├── renderer/              # React Application Files (Renderer Process)
+│   ├── index.js           # Entry point for the React app
+│   ├── App.js             # Root React component
+│   ├── assets/            # Images, fonts, etc.
+│   ├── components/        # Reusable UI components
+│   │   ├── AppButton.js
+│   │   ├── Clock.js
+│   │   ├── PasswordModal.js
+│   │   └── ...
+│   ├── constants/         # Application-wide constants
+│   │   └── index.js
+│   ├── contexts/          # React Context providers
+│   │   └── AppContext.js
+│   ├── hooks/             # Custom React hooks
+│   │   └── useConfig.js
+│   ├── screens/           # Top-level screen components
+│   │   ├── HomeScreen.js
+│   │   ├── SettingsScreen.js
+│   │   └── WebviewScreen.js
+│   └── utils/             # Utility functions
+│       └── apiClient.js
+└── config.json            # Default/template configuration file
+
+4.2. Component Breakdown
+<App.js> (Root Component)
+Responsibility: Manages the global AppContext.Provider, listens for global online/offline events, and routes between the main screens (<HomeScreen>, <SettingsScreen>). It should contain the global ESC key listener.
+
+<HomeScreen />
+Responsibility: The main landing screen. Composes the <Header> and <AppGrid> components. It does not contain business logic.
+
+<Header />
+Responsibility: Displays the top part of the UI. Composes <Clock />, <DateDisplay />, and <WeatherWidget />.
+
+<WeatherWidget />
+State: weatherData, isLoading, error.
+
+Responsibility: On mount, calls the apiClient.getWeather() function. Displays a loading state, the fetched weather data, or an error message. Data fetching logic is delegated to apiClient.js.
+
+<AppGrid />
+Props: apps (array).
+
+Responsibility: Maps over the apps array from the AppContext and renders an <AppButton /> for each item.
+
+<AppButton />
+Props: app (object), onClick (function).
+
+Responsibility: A single, large, clickable button. Displays the app's icon and name. On click, it triggers the onClick handler passed from its parent, which will change the application's view to the <WebviewScreen>.
+
+<WebviewScreen />
+Responsibility: Manages and displays all <webview> tags.
+
+Logic:
+
+It receives the apps array from the AppContext.
+
+It renders one <webview> tag for each app in the array.
+
+It uses the activeWebviewId from AppContext to determine which webview should be visible (style={{ display: 'block' }}). All others are hidden (style={{ display: 'none' }}). This ensures session state is preserved.
+
+It renders a persistent "Close" button that, when clicked, sets activeWebviewId to null.
+
+<PasswordModal />
+Responsibility: The modal dialog for entering the password.
+
+State: passwordInput, errorCount, isSubmitting.
+
+Logic: Manages password validation as specified in the previous design document. On successful authentication, it calls a prop function (onSuccess) to notify the parent to switch to the <SettingsScreen>.
+
+4.3. State Management (AppContext.js)
+Define a single, global context to manage application-wide state.
+
+State Shape:
+
+config: The entire config.json object.
+
+isOnline: A boolean indicating network status.
+
+activeWebviewId: A string (id of the app) or null.
+
+Provided Functions:
+
+loadConfig(): Reads the config from the filesystem via IPC.
+
+saveConfig(newConfig): Saves the updated config via IPC.
+
+setActiveWebview(appId): Updates activeWebviewId.
+
+showSettings(): A function to switch the main view to the settings screen.
+
+showHome(): A function to switch the main view to the home screen.
+
+4.4. Electron Main Process (main.js)
+This file is the application's backbone.
+
+Responsibilities:
+
+Create the BrowserWindow with fullscreen, kiosk, and frame: false options.
+
+Load the React application using win.loadURL().
+
+Set up all ipcMain.handle and ipcMain.on listeners for communication from the renderer process.
+
+IPC Handlers (MUST IMPLEMENT):
+
+ipcMain.handle('load-config'): Reads config.json from app.getPath('userData') and returns its content. Handles the case where the file doesn't exist by copying the default config.json from the application's root.
+
+ipcMain.on('save-config', (event, newConfig)): Receives new config data and writes it to config.json.
+
+ipcMain.on('open-network-settings'): Uses shell.openPath() to open the OS-specific network settings.
+
+ipcMain.on('app-quit'): Calls app.quit().
+
+5. Backend-Side Architecture (Node.js + Express)
+5.1. Project Folder Structure
+backend/
+├── controllers/          # Handles request/response logic
+│   ├── weatherController.js
+│   └── smsController.js
+├── routes/               # Defines API routes
+│   └── index.js
+├── services/             # Business logic & 3rd party APIs
+│   ├── weatherService.js
+│   └── smsService.js
+├── middleware/           # Express middleware
+│   └── errorHandler.js
+├── .env                  # Environment variables
+└── server.js             # Entry point
+
+5.2. API Implementation
+server.js (Entry Point)
+Responsibility: Initializes the Express app, loads environment variables from .env using dotenv, applies middleware (like cors and express.json()), mounts the main router from routes/index.js, and starts the server. It must also mount the global errorHandler middleware last.
+
+routes/index.js (Router)
+Responsibility: Imports controllers and defines the specific API routes.
+
+const express = require('express');
+const weatherController = require('../controllers/weatherController');
+const smsController = require('../controllers/smsController');
+const router = express.Router();
+
+router.get('/api/weather', weatherController.getWeather);
+router.post('/api/sms-reminder', smsController.sendReminder);
+
+module.exports = router;
+
+Controllers (weatherController.js, smsController.js)
+Responsibility: To parse the request object and send the response. They should not contain any business logic. All logic must be delegated to a service. Controllers are thin. They should use try...catch blocks to pass errors to the errorHandler.
+
+// Example: smsController.js
+const smsService = require('../services/smsService');
+
+async function sendReminder(req, res, next) {
+  try {
+    const { mobileNumber, password } = req.body;
+    // Basic validation could happen here
+    await smsService.sendPasswordSms(mobileNumber, password);
+    res.status(200).json({ message: 'SMS sent successfully.' });
+  } catch (error) {
+    next(error); // Pass error to the global handler
+  }
+}
+
+Services (weatherService.js, smsService.js)
+Responsibility: Contain all business logic and interactions with third-party APIs. They should use axios or a similar HTTP client for making API calls. They should throw errors if an operation fails, which will be caught by the controller.
+
+errorHandler.js (Middleware)
+Responsibility: A global error handler that catches all errors passed via next(error). It logs the error and sends a standardized JSON error response to the client. This ensures consistent error formatting.
+
+6. Implementation Roadmap
+Follow these steps in order.
+
+Backend First:
+
+Set up the Node.js/Express project structure as defined above.
+
+Implement the /api/weather endpoint with a hard-coded response.
+
+Implement the /api/sms-reminder endpoint, logging the request to the console without actually sending an SMS.
+
+Integrate the actual Weather and SMS services last.
+
+Client Setup:
+
+Set up the Electron/React project structure.
+
+Implement the main.js logic for creating the window and setting up the IPC handlers (load-config, save-config).
+
+Client UI & State:
+
+Build the static React components (<HomeScreen>, etc.) with placeholder data.
+
+Implement the AppContext to manage state.
+
+Connect the components to the context to display dynamic data.
+
+Integration:
+
+Implement apiClient.js to connect the React UI to the backend endpoints.
+
+Connect the <WeatherWidget> to the getWeather API call.
+
+Connect the "Forgot Password" functionality to the sendReminder API call.
+
+Final Polish:
+
+Implement the <WebviewScreen> logic for showing/hiding webviews.
+
+Implement the full settings screen logic, including saving the configuration.
+
+Add the auto-launch functionality.
+
+This detailed plan provides a clear path from setup to completion, ensuring all architectural requirements are met.

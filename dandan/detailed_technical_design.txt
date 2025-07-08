@@ -1,0 +1,379 @@
+Golden Protect - Executive Technical Blueprint
+Document Version: 1.1
+For: Junior Development Team
+From: Senior Product Architecture
+Date: June 17, 2025
+
+1. Introduction & Core Mandates
+1.1. Document Purpose
+This document is the single source of truth for the technical implementation of the Golden Protect application. It is not a suggestion; it is a specification. Your objective is to translate this blueprint into functional code with maximum fidelity. Deviation from this guide is not permitted without explicit architectural approval.
+
+1.2. Guiding Principles for the Developer
+Clarity Over Cleverness: Write code that is easy to read and understand. Another developer should be able to grasp its purpose without significant effort.
+
+Single Responsibility Principle (SRP): Every function, component, and module must have one, and only one, reason to change. A component should not fetch data AND display it AND handle user input. Break these concerns into separate modules (hooks, API clients, UI components).
+
+No Magic Strings: Do not use raw strings for action types, event names, or keys. Use constants exported from a central file (e.g., src/renderer/constants/index.js).
+
+Immutability: State must never be mutated directly. Use React's setState or reducer patterns to create a new state object. This is critical for predictable rendering.
+
+Defensive Programming: Assume inputs can be invalid. Validate function arguments, API responses, and user inputs.
+
+2. Core Technologies & Setup
+2.1. Client Application
+Electron: v28.0.0 or later
+
+React: v18.2.0 or later
+
+Node.js (for Electron runtime): v18.18.0 or later
+
+Boilerplate: Use a modern Vite-based Electron + React template.
+
+Linting (Mandatory): Configure ESLint with the following .eslintrc.json configuration. Your code must be free of all reported errors.
+
+{
+  "extends": [
+    "eslint:recommended",
+    "plugin:react/recommended",
+    "plugin:react-hooks/recommended",
+    "airbnb"
+  ],
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "react/jsx-filename-extension": [1, { "extensions": [".js", ".jsx"] }],
+    "react/prop-types": "off"
+  },
+  "parserOptions": {
+    "ecmaVersion": 2022,
+    "sourceType": "module"
+  },
+  "env": {
+    "browser": true,
+    "node": true
+  }
+}
+
+2.2. Backend Service
+Node.js: v18.18.0 or later
+
+Express.js: v4.18.2 or later
+
+Linting: Use the identical ESLint configuration as the client.
+
+3. Client-Side Architecture (Electron + React)
+4.1. Project Folder Structure (src)
+This structure is mandatory.
+
+src/
+├── main/                  # Main Electron Process
+│   ├── main.js
+│   └── preload.js
+├── renderer/              # React Application (Renderer Process)
+│   ├── App.js
+│   ├── index.js
+│   ├── assets/
+│   ├── components/
+│   ├── constants/
+│   │   └── channels.js    # For IPC channel names
+│   ├── contexts/
+│   │   └── AppContext.js
+│   ├── hooks/
+│   │   └── useConfig.js
+│   ├── screens/
+│   └── utils/
+│       └── apiClient.js
+└── config.template.json   # Default/template configuration
+
+4.2. Secure IPC Communication (preload.js and channels.js)
+To securely expose main process functionality to the renderer, the preload.js script will act as a bridge.
+
+src/renderer/constants/channels.js (No Magic Strings)
+
+export const CHANNELS = {
+  LOAD_CONFIG: 'load-config',
+  SAVE_CONFIG: 'save-config',
+  OPEN_NETWORK_SETTINGS: 'open-network-settings',
+  APP_QUIT: 'app-quit',
+};
+
+src/main/preload.js (The Bridge)
+
+const { contextBridge, ipcRenderer } = require('electron');
+const { CHANNELS } = require('../renderer/constants/channels');
+
+contextBridge.exposeInMainWorld('electronAPI', {
+  loadConfig: () => ipcRenderer.invoke(CHANNELS.LOAD_CONFIG),
+  saveConfig: (config) => ipcRenderer.send(CHANNELS.SAVE_CONFIG, config),
+  openNetworkSettings: () => ipcRenderer.send(CHANNELS.OPEN_NETWORK_SETTINGS),
+  quitApp: () => ipcRenderer.send(CHANNELS.APP_QUIT),
+});
+
+The renderer will now access these functions via window.electronAPI.loadConfig().
+
+4.3. State Management (AppContext.js)
+This context will be the single source of truth for the UI. Implement it using useReducer for predictable state transitions.
+
+src/renderer/contexts/AppContext.js
+
+import React, { createContext, useReducer, useContext } from 'react';
+
+// 1. Define Action Types
+const ActionTypes = {
+  SET_CONFIG: 'SET_CONFIG',
+  SET_ONLINE_STATUS: 'SET_ONLINE_STATUS',
+  SET_ACTIVE_WEBVIEW: 'SET_ACTIVE_WEBVIEW',
+  SET_CURRENT_VIEW: 'SET_CURRENT_VIEW',
+};
+
+// 2. Initial State
+const initialState = {
+  config: null,
+  isLoading: true,
+  isOnline: navigator.onLine,
+  activeWebviewId: null,
+  currentView: 'home', // 'home', 'settings'
+};
+
+// 3. Reducer Function
+function appReducer(state, action) {
+  switch (action.type) {
+    case ActionTypes.SET_CONFIG:
+      return { ...state, config: action.payload, isLoading: false };
+    case ActionTypes.SET_ONLINE_STATUS:
+      return { ...state, isOnline: action.payload };
+    case ActionTypes.SET_ACTIVE_WEBVIEW:
+      return { ...state, activeWebviewId: action.payload };
+    case ActionTypes.SET_CURRENT_VIEW:
+      return { ...state, currentView: action.payload, activeWebviewId: null }; // Reset webview on view change
+    default:
+      throw new Error(`Unhandled action type: ${action.type}`);
+  }
+}
+
+// 4. Create Context and Provider
+const AppContext = createContext();
+
+export function AppProvider({ children }) {
+  const [state, dispatch] = useReducer(appReducer, initialState);
+
+  // 5. Memoized Value
+  const value = { state, dispatch, ActionTypes };
+
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+}
+
+// 6. Custom Hook for easy consumption
+export function useAppContext() {
+  const context = useContext(AppContext);
+  if (context === undefined) {
+    throw new Error('useAppContext must be used within a AppProvider');
+  }
+  return context;
+}
+
+4.4. Component Implementation Guide
+<App.js> (Root Component)
+Responsibility: Wrap the entire application in <AppProvider>. Load the initial configuration. Render <HomeScreen /> or <SettingsScreen /> based on state.currentView.
+
+Logic:
+
+Use a useEffect hook with an empty dependency array ([]) to perform setup on mount.
+
+Inside useEffect, add event listeners for online and offline events to dispatch SET_ONLINE_STATUS. Return a cleanup function to remove these listeners.
+
+Call window.electronAPI.loadConfig() and dispatch SET_CONFIG with the returned data.
+
+Implement the global ESC key listener here.
+
+<WebviewScreen />
+Responsibility: The container for all <webview> elements.
+
+Props Interface: This component will not take props; it will consume state.config.apps and state.activeWebviewId from useAppContext.
+
+Logic:
+
+Get state from useAppContext().
+
+If !state.config, return null or a loading indicator.
+
+Render a parent <div> that contains a map function over state.config.apps.
+
+Inside the map, render a <webview> for each app.
+
+key: app.id
+
+src: app.url
+
+zoomFactor: state.config.accessibility.webpageZoom
+
+style: { display: state.activeWebviewId === app.id ? 'flex' : 'none' }
+
+nodeintegration: false (for security)
+
+preload: Do not set a preload script for external sites.
+
+Render the "Close" button. Its onClick handler will dispatch SET_ACTIVE_WEBVIEW with null as the payload.
+
+4.5. Electron Main Process (main.js) - Detailed Logic
+ipcMain.handle(CHANNELS.LOAD_CONFIG):
+
+Define the path to config.json using path.join(app.getPath('userData'), 'config.json').
+
+Use a try...catch block.
+
+Inside try, read the file with fs.readFileSync. Parse the JSON and return it.
+
+Inside catch (if the error code is ENOENT, meaning file not found):
+
+Define the path to the template: path.join(__dirname, '../config.template.json').
+
+Read the template file.
+
+Write the template content to the user data path.
+
+Return the parsed template data.
+
+If any other error occurs, log it and return null.
+
+ipcMain.on(CHANNELS.SAVE_CONFIG, (event, newConfig)):
+
+Define the path to config.json.
+
+Validate that newConfig is a valid object. If not, log an error and return.
+
+Use fs.writeFileSync to save the stringified newConfig object.
+
+5. Backend-Side Architecture (Node.js + Express)
+5.1. API Contract Definition
+This is the non-negotiable structure of your API.
+
+GET /api/weather
+Description: Fetches weather for a given location.
+
+Query Parameters:
+
+lat (number, required)
+
+lon (number, required)
+
+Success Response (200 OK):
+
+{
+  "temperature": 18,
+  "condition": "Partly Cloudy",
+  "icon": "partly-cloudy-day"
+}
+
+Error Response (400 Bad Request):
+
+{
+  "error": "Latitude and longitude are required."
+}
+
+Error Response (500 Internal Server Error):
+
+{
+  "error": "Failed to fetch weather data."
+}
+
+POST /api/sms-reminder
+Description: Sends a password reminder via SMS.
+
+Request Body:
+
+{
+  "mobileNumber": "+15551234567",
+  "password": "user-password-123"
+}
+
+Success Response (200 OK):
+
+{ "message": "SMS reminder sent successfully." }
+
+Error Response (400 Bad Request):
+
+{
+  "error": "A valid mobileNumber and password are required."
+}
+
+5.2. Service Implementation (smsService.js)
+Responsibility: This module is solely responsible for interacting with the Twilio (or other) SMS API. It must not contain any Express-related code (req, res).
+
+Function Signature:
+
+/**
+ * Sends the password reminder SMS.
+ * @param {string} mobileNumber The E.164 formatted target phone number.
+ * @param {string} password The user's password to send.
+ * @throws {Error} If the SMS fails to send or inputs are invalid.
+ */
+async function sendPasswordSms(mobileNumber, password) {
+  // 1. Validate inputs. If invalid, throw new Error(...).
+  // 2. Initialize the Twilio client using credentials from process.env.
+  // 3. Construct the message body: `Your Golden Protect password is: ${password}`
+  // 4. Call the Twilio API inside a try...catch block.
+  // 5. If the API call fails, throw a new, more specific Error.
+}
+
+6. Implementation Roadmap (Expanded)
+Project Setup (Day 1):
+
+Initialize both the client and backend projects.
+
+Install all dependencies.
+
+Configure ESLint in both projects and ensure the initial boilerplate code passes the linting checks.
+
+Backend "Smoke Test" (Day 1-2):
+
+Implement the backend folder structure.
+
+Implement the full server.js, routes, and errorHandler.
+
+Create "dummy" controllers that return hard-coded success responses for both endpoints.
+
+Use Postman or a similar tool to verify that both routes (GET /api/weather, POST /api/sms-reminder) work and return the expected dummy data.
+
+Client IPC & Config (Day 2-3):
+
+Implement the full main.js and preload.js scripts.
+
+Implement the LOAD_CONFIG and SAVE_CONFIG IPC handlers.
+
+Implement the AppContext.js provider and useAppContext hook exactly as specified.
+
+In App.js, call loadConfig() on mount and log the result to ensure the IPC bridge is working.
+
+Static UI Build (Day 4-5):
+
+Build all React components (<Header>, <AppGrid>, etc.) with static, hard-coded data. Do not connect to context or APIs yet. Focus on making the UI look correct according to the visual design.
+
+Connecting UI to State (Day 6-7):
+
+Refactor the static components to pull data from the AppContext. The UI should now dynamically reflect the data in config.json.
+
+Implement the logic to switch between the <HomeScreen> and <SettingsScreen>.
+
+Implement the logic to show/hide the <WebviewScreen> and set the activeWebviewId.
+
+Backend Service Integration (Day 8):
+
+Implement the real logic inside weatherService.js and smsService.js to call the third-party APIs.
+
+Update the controllers to call these services.
+
+Client-Backend Integration (Day 9):
+
+Implement apiClient.js in the client.
+
+Connect the <WeatherWidget> and the "Forgot Password" functionality to the apiClient.
+
+Final Polish & Testing (Day 10):
+
+Implement the full functionality of the <SettingsScreen>, including saving changes.
+
+Implement the remaining IPC handlers (open-network-settings, app-quit).
+
+Add the auto-launch functionality.
+
+Thoroughly test every feature described in the original design document.

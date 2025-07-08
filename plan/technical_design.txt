@@ -1,0 +1,69 @@
+# 3. Technical_Design.md
+**Version: 1.0**
+**Date: July 9, 2024**
+
+## 1. Local Architecture
+The system is composed of a React frontend, a Node.js backend, and a local database, all running on the developer's machine.
+
+
++-----------------------------+      +--------------------------------+      +---------------------+
+|      React Frontend         |      |      Node.js Backend           |      |      Database       |
+| (Vite, running on port 5173)|<---->| (Express, running on port 4000)|<---->|  (SQLite via Prisma)|
++-----------------------------+      +--------------------------------+      +---------------------+
+| ^                               | - Authentication (JWT)         |                  ^
+| |                               | - Content Personalization      |                  |
+| +-------------------------------| - Progress & Event Logging     |------------------+
+|                                 | - OpenAI API Calls             |
+v                                 +--------------------------------+
++-----------------------------+                  ^
+|        Vimeo Player         |                  |
++-----------------------------+                  v
++--------------------------------+
+|        OpenAI API              |
++--------------------------------+
+
+
+## 2. Component Responsibilities
+
+* **React Frontend (SPA):**
+    * **Responsibility:** Render the UI for all personas. It must be "dumb," containing minimal business logic. Its primary job is to make API calls to the backend and render the returned JSON data.
+    * **Data Flow:** All data is fetched from the backend API. The frontend must not contain any hardcoded content.
+    * **Analytics:** It is responsible for instrumenting user actions (clicks, timers, etc.) and sending structured data to the backend's `/api/v1/events` endpoint.
+
+* **Node.js Backend (Express):**
+    * **Responsibility:** Act as the application's central authority.
+    * **Authentication & Authorization:** Manages user login, issues JWTs, and protects routes based on user roles.
+    * **Personalization Engine:** Contains the critical logic to fetch the correct content variants from the database based on the authenticated user's profile.
+    * **Event Logging:** Provides an endpoint (`/api/v1/events`) to receive and persist user interaction data to the `UserEvents` table.
+    * **LLM Integration:** Securely stores the OpenAI API key and system prompts. It is the only component that communicates with the OpenAI API.
+
+* **Database (Prisma with SQLite):**
+    * **Responsibility:** The single source of truth for all application data.
+    * **Schema:** Must implement the full, normalized schema defined in `detailed_technical_design.txt`, including the `UserEvents` table for analytics.
+
+## 3. APIs & Data Flows
+
+### Fetching a Step (Core Data Flow)
+1.  **Request:** `GET /api/v1/steps/{stepId}` (with JWT in `Authorization` header).
+2.  **Backend Logic:**
+    * Validates JWT, retrieves `userId`.
+    * Fetches the user's profile.
+    * Queries the DB for the requested `step`, its `task_screens`, and all associated `screen_components`.
+    * For each component, it runs the **variant resolution logic** to select the correct content.
+    * Assembles the final, personalized JSON object for the entire step.
+3.  **Response:** Returns a single JSON object that the frontend can directly render.
+
+### Logging a User Event
+1.  **Trigger:** A user performs an action on the frontend (e.g., clicks the "Skip" button).
+2.  **Request:** The frontend sends a `POST` request to `/api/v1/events`.
+    * **Body:** `{ "eventType": "TASK_SKIP", "moduleId": 1, "stepId": 101, "eventData": { "skippedFromScreen": 2 } }`
+3.  **Backend Logic:**
+    * The backend validates the request body.
+    * It retrieves the `userId` from the JWT.
+    * It writes a new record to the `UserEvents` table with the provided data and a server-side timestamp.
+4.  **Response:** Returns a `201 Created` status with no body.
+
+## 4. Security Model
+* **Authentication:** Stateless JWTs are used for all authenticated API requests.
+* **Authorization:** Backend endpoints are protected with middleware that checks the user's role from the JWT payload.
+* **Data Security:** No sensitive data (API keys, system prompts) is ever sent to the client.
