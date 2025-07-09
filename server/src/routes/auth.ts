@@ -9,7 +9,7 @@ const prisma = new PrismaClient();
 // Register endpoint
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    const { email, password, name, role = 'LEARNER', department, copilotLanguage, aiKnowledgeLevel = 1 } = req.body;
+    const { email, password, name, role = 'LEARNER', dept_code, language_preference, level = 1 } = req.body;
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
@@ -23,28 +23,32 @@ router.post('/register', async (req: Request, res: Response) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Generate user ID
+    const user_id = `user_${Date.now()}`;
+
     // Create user
     const user = await prisma.user.create({
       data: {
+        user_id,
         email,
-        password: hashedPassword,
+        password_hash: hashedPassword,
         name,
         role,
-        department,
-        copilotLanguage,
-        aiKnowledgeLevel
+        dept_code,
+        language_preference,
+        level
       }
     });
 
     // Generate JWT
     const token = jwt.sign(
       { 
-        userId: user.id, 
+        userId: user.user_id, 
         email: user.email, 
         role: user.role,
-        department: user.department,
-        copilotLanguage: user.copilotLanguage,
-        aiKnowledgeLevel: user.aiKnowledgeLevel
+        dept_code: user.dept_code,
+        language_preference: user.language_preference,
+        level: user.level
       },
       process.env.JWT_SECRET!,
       { expiresIn: '24h' }
@@ -53,13 +57,13 @@ router.post('/register', async (req: Request, res: Response) => {
     res.status(201).json({
       token,
       user: {
-        id: user.id,
+        user_id: user.user_id,
         email: user.email,
         name: user.name,
         role: user.role,
-        department: user.department,
-        copilotLanguage: user.copilotLanguage,
-        aiKnowledgeLevel: user.aiKnowledgeLevel
+        dept_code: user.dept_code,
+        language_preference: user.language_preference,
+        level: user.level
       }
     });
   } catch (error) {
@@ -83,7 +87,7 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     // Check password
-    const isValidPassword = await bcrypt.compare(password, user.password);
+    const isValidPassword = await bcrypt.compare(password, user.password_hash);
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -91,12 +95,12 @@ router.post('/login', async (req: Request, res: Response) => {
     // Generate JWT
     const token = jwt.sign(
       { 
-        userId: user.id, 
+        userId: user.user_id, 
         email: user.email, 
         role: user.role,
-        department: user.department,
-        copilotLanguage: user.copilotLanguage,
-        aiKnowledgeLevel: user.aiKnowledgeLevel
+        dept_code: user.dept_code,
+        language_preference: user.language_preference,
+        level: user.level
       },
       process.env.JWT_SECRET!,
       { expiresIn: '24h' }
@@ -105,13 +109,13 @@ router.post('/login', async (req: Request, res: Response) => {
     res.json({
       token,
       user: {
-        id: user.id,
+        user_id: user.user_id,
         email: user.email,
         name: user.name,
         role: user.role,
-        department: user.department,
-        copilotLanguage: user.copilotLanguage,
-        aiKnowledgeLevel: user.aiKnowledgeLevel
+        dept_code: user.dept_code,
+        language_preference: user.language_preference,
+        level: user.level
       }
     });
   } catch (error) {

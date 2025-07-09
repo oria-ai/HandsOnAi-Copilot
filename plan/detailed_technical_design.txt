@@ -1,207 +1,119 @@
-# 4. Detailed_Technical_Design.md
-**Version: 1.1**
-**Date: July 9, 2024**
+# Detailed Technical Design
+**Version: 2.0**
+**Date: July 10, 2024**
 
 ## 1. Directory Tree
 This structure is mandatory to ensure consistency and maintainability.
 
 ### Frontend (`/`)
-/├── public/│   └── icons/│       ├── word.svg│       └── excel.svg├── src/│   ├── components/│   │   ├── ui/                 # Reusable UI components from shadcn│   │   └── common/│   │       ├── Header.tsx│   │       ├── LoadingSpinner.tsx│   │       └── SiteChatbot.tsx│   ├── features/│   │   ├── Authentication/│   │   │   ├── components/│   │   │   │   └── LoginForm.tsx│   │   │   └── routes/│   │   │       └── LoginPage.tsx│   │   ├── Dashboard/│   │   │   └── routes/│   │   │       └── DashboardPage.tsx│   │   ├── ModuleView/│   │   │   ├── components/│   │   │   │   ├── ModuleSidebar.tsx│   │   │   │   ├── StepContainer.tsx│   │   │   │   └── ScreenContainer.tsx│   │   │   ├── hooks/│   │   │   │   └── useModuleData.ts│   │   │   └── routes/│   │   │       └── ModulePage.tsx│   │   └── Tasks/│   │       ├── components/│   │       │   ├── Instructions.tsx│   │       │   ├── ImageDisplay.tsx│   │       │   ├── QuestionMultiChoice.tsx│   │       │   └── QuestionOpen.tsx│   │       └── index.ts│   ├── lib/│   │   ├── api.ts              # Central API client (e.g., axios instance)│   │   └── utils.ts│   ├── contexts/│   │   └── AnalyticsProvider.tsx # Context for logging events│   └── main.tsx├── package.json├── tsconfig.json└── vite.config.ts
+/├── public/│   └── icons/├── src/│   ├── components/│   │   ├── ui/│   │   └── common/│   ├── features/│   │   ├── Authentication/│   │   ├── Dashboard/│   │   ├── ModuleView/│   │   └── Tasks/│   ├── lib/│   │   ├── api.ts│   │   └── utils.ts│   ├── contexts/│   │   └── AnalyticsProvider.tsx│   └── main.tsx├── package.json└── tsconfig.json
 ### Backend (`/server`)
-server/├── src/│   ├── main.ts               # Server entry point│   ├── app.module.ts         # Root NestJS module│   ├── auth/│   │   ├── auth.module.ts│   │   ├── auth.controller.ts│   │   └── jwt.strategy.ts│   ├── users/│   │   ├── users.module.ts│   │   └── users.service.ts│   ├── content/│   │   ├── content.module.ts│   │   ├── content.controller.ts│   │   └── services/│   │       ├── content.service.ts│   │       └── variant-resolution.service.ts│   ├── analytics/│   │   ├── analytics.module.ts│   │   └── analytics.controller.ts # Handles POST /events│   └── prisma/│       ├── schema.prisma│       └── migrations/└── package.json
+server/├── src/│   ├── main.ts│   ├── app.module.ts│   ├── auth/│   ├── users/│   ├── content/│   │   └── services/│   │       └── variant-resolution.service.ts│   ├── analytics/│   └── prisma/└── package.json
 ## 2. Naming Conventions
 * **Files:** `PascalCase.tsx` for React components, `camelCase.ts` for other modules.
 * **React Components:** `PascalCase`, e.g., `ModuleSidebar`.
 * **Environment Variables:** `SCREAMING_SNAKE_CASE`, e.g., `DATABASE_URL`.
 * **Database Tables & Columns:** `snake_case`, e.g., `task_screens`, `user_id`.
-* **API Endpoints:** `kebab-case` for paths, e.g., `/api/v1/content-modules/{moduleId}`.
+* **Human-Readable IDs:** `TEXT` primary keys will be used for content entities (e.g., `'01-word'`, `'word_o2'`). Standard `UUID`s will be used for variants and events.
 
-## 3. Final Prisma Schema (`/server/prisma/schema.prisma`)
-This is the complete schema required for the full system.
+## 3. Final Database Schema (to be implemented in Prisma)
+```sql
+-- 1. Identity & Organization
+CREATE TABLE departments (
+    dept_code   TEXT PRIMARY KEY,
+    name        TEXT NOT NULL
+);
+CREATE TABLE users (
+    user_id           TEXT PRIMARY KEY,
+    email             TEXT UNIQUE NOT NULL,
+    password_hash     TEXT NOT NULL,
+    name              TEXT,
+    dept_code         TEXT REFERENCES departments(dept_code),
+    role              TEXT,
+    level             INT,
+    language_preference TEXT
+);
 
-```prisma
-// This is your Prisma schema file,
-// learn more about it in the docs: [https://pris.ly/d/prisma-schema](https://pris.ly/d/prisma-schema)
+-- 2. Course Catalogue & Structure
+CREATE TABLE modules (
+    module_id   TEXT PRIMARY KEY, -- e.g., '01-word'
+    title       TEXT NOT NULL,
+    position    INT NOT NULL
+);
+CREATE TABLE steps (
+    step_id     TEXT PRIMARY KEY, -- e.g., 'word_v1', 'word_o2'
+    module_id   TEXT REFERENCES modules(module_id),
+    title       TEXT NOT NULL,
+    position    INT NOT NULL,
+    task_type   TEXT NOT NULL, -- 'VIDEO', 'CONCLUSION', 'ORIENTATION', 'HANDSON', 'SKILL'
+    task_id     TEXT NOT NULL
+);
 
-generator client {
-  provider = "prisma-client-js"
-}
+-- 3. Specific Task Content Tables
+CREATE TABLE video_steps ( task_id TEXT PRIMARY KEY, vimeo_url TEXT NOT NULL );
+CREATE TABLE conclusion_steps ( task_id TEXT PRIMARY KEY, markdown TEXT NOT NULL );
+CREATE TABLE handson_tasks ( task_id TEXT PRIMARY KEY, title TEXT NOT NULL, has_download_file BOOLEAN, download_file_url TEXT, cards_config JSONB NOT NULL );
+CREATE TABLE orientation_tasks ( task_id TEXT PRIMARY KEY, title TEXT NOT NULL, screens JSONB NOT NULL );
 
-datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
-}
+-- 4. Skill Task Tables (Powerful & Flexible)
+CREATE TABLE skill_task_screens (
+    screen_id   UUID PRIMARY KEY,
+    task_id     TEXT NOT NULL,
+    position    INT NOT NULL
+);
+CREATE TABLE skill_screen_variants (
+    variant_id    UUID PRIMARY KEY,
+    screen_id     UUID REFERENCES skill_task_screens(screen_id),
+    part          TEXT NOT NULL, -- 'instructions' or 'mission'
+    target_role   TEXT,
+    target_level  INT,
+    target_lang   TEXT,
+    content       JSONB NOT NULL,
+    UNIQUE (screen_id, part, target_role, target_level, target_lang)
+);
 
-model User {
-  id                String    @id @default(cuid())
-  email             String    @unique
-  name              String?
-  password          String // In a real app, this should be a hash
-  role              String    @default("LEARNER") // LEARNER, AUTHOR, MANAGER
-  department        String?
-  copilotLanguage   String?
-  aiKnowledgeLevel  Int       @default(1)
-  createdAt         DateTime  @default(now())
-
-  // Relations
-  progress          UserProgress[]
-  submissions       TaskSubmission[]
-  conversations     Conversation[]
-  events            UserEvent[]
-}
-
-model Module {
-  id          Int      @id @default(autoincrement())
-  title       String
-  description String?
-  iconPath    String?  // e.g., '/icons/word.svg'
-  createdAt   DateTime @default(now())
-
-  // Relations
-  steps       Step[]
-}
-
-model Step {
-  id          Int      @id @default(autoincrement())
-  moduleId    Int
-  order       Int
-  title       String
-  type        String   // VIDEO, ORIENTATION, SKILL, HANDSON, CHAT, CONCLUSION
-  createdAt   DateTime @default(now())
-
-  // Relations
-  module      Module        @relation(fields: [moduleId], references: [id])
-  screens     TaskScreen[]
-  submissions TaskSubmission[]
-}
-
-model TaskScreen {
-  id        Int      @id @default(autoincrement())
-  stepId    Int
-  order     Int
-  createdAt DateTime @default(now())
-
-  // Relations
-  step      Step                @relation(fields: [stepId], references: [id])
-  components ScreenComponent[]
-}
-
-model ScreenComponent {
-  id             Int      @id @default(autoincrement())
-  screenId       Int
-  componentType  String   // INSTRUCTIONS, IMAGE_DISPLAY, QUESTION_MULTICHOICE, etc.
-  slot           String   // top_panel, main_content, etc.
-  defaultContent Json     // The default content for this component
-
-  // Relations
-  screen        TaskScreen         @relation(fields: [screenId], references: [id])
-  variants      ComponentVariant[]
-}
-
-model ComponentVariant {
-  id                Int     @id @default(autoincrement())
-  componentId       Int
-  variantContent    Json    // The overriding content for this variant
-
-  // Targeting attributes
-  targetRole            String?
-  targetAiKnowledgeLevel Int?
-  targetCopilotLanguage String?
-
-  // Relations
-  component ScreenComponent @relation(fields: [componentId], references: [id])
-
-  @@unique([componentId, targetRole, targetAiKnowledgeLevel, targetCopilotLanguage])
-}
-
-model UserProgress {
-  id         Int      @id @default(autoincrement())
-  userId     String
-  stepId     Int
-  status     String   // NOT_STARTED, IN_PROGRESS, COMPLETED
-  progressPercent Int @default(0)
-  lastScreen Int      @default(1)
-  updatedAt  DateTime @updatedAt
-
-  // Relations
-  user       User     @relation(fields: [userId], references: [id])
-
-  @@unique([userId, stepId])
-}
-
-model TaskSubmission {
-  id           Int      @id @default(autoincrement())
-  userId       String
-  stepId       Int
-  submittedAt  DateTime @default(now())
-  content      Json
-  aiFeedback   Json?
-
-  // Relations
-  user User @relation(fields: [userId], references: [id])
-  step Step @relation(fields: [stepId], references: [id])
-}
-
-model Conversation {
-  id        Int       @id @default(autoincrement())
-  userId    String
-  stepId    Int?
-  createdAt DateTime  @default(now())
-
-  // Relations
-  user      User      @relation(fields: [userId], references: [id])
-  messages  ConversationMessage[]
-}
-
-model ConversationMessage {
-  id             Int      @id @default(autoincrement())
-  conversationId Int
-  sender         String   // USER or AI
-  content        String
-  timestamp      DateTime @default(now())
-
-  // Relations
-  conversation Conversation @relation(fields: [conversationId], references: [id])
-}
-
-model UserEvent {
-  id        Int      @id @default(autoincrement())
-  userId    String
-  moduleId  Int
-  stepId    Int
-  screenId  Int?
-  eventType String
-  eventData Json?
-  timestamp DateTime @default(now())
-
-  // Relations
-  user User @relation(fields: [userId], references: [id])
-}
-4. API Response Contract (View Model)The API for GET /api/v1/steps/{stepId} must return a JSON object with this structure:{
-  "stepId": 101,
+-- 5. User State & Analytics
+CREATE TABLE department_module_assignments (
+    dept_code   TEXT REFERENCES departments(dept_code),
+    module_id   TEXT REFERENCES modules(module_id),
+    PRIMARY KEY (dept_code, module_id)
+);
+CREATE TABLE user_progress (
+    user_id     TEXT REFERENCES users(user_id),
+    module_id   TEXT REFERENCES modules(module_id),
+    progress_percent INT NOT NULL DEFAULT 0,
+    last_seen_step_id TEXT REFERENCES steps(step_id),
+    updated_at  TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (user_id, module_id)
+);
+CREATE TABLE user_events (
+    event_id    UUID PRIMARY KEY,
+    user_id     TEXT REFERENCES users(user_id),
+    step_id     TEXT REFERENCES steps(step_id),
+    event_type  TEXT NOT NULL,
+    event_data  JSONB,
+    timestamp   TIMESTAMPTZ DEFAULT now()
+);
+4. API Response Contract (View Model)The API for GET /api/v1/steps/{stepId} where task_type is SKILL must return a JSON object with this structure:{
+  "stepId": "word_s3",
   "type": "SKILL",
   "header": "Task: Improving a Prompt",
   "screens": [
     {
-      "screenId": 201,
+      "screenId": "uuid-for-screen-1",
       "order": 1,
       "components": [
         {
-          "componentId": 301,
+          "componentId": "uuid-for-component-1",
           "type": "INSTRUCTIONS",
           "slot": "top_panel",
-          "content": {
-            "text": "First, select the missing elements from the prompt below."
-          }
+          "content": { "text": "Personalized instructions for this user..." }
         },
         {
-          "componentId": 302,
+          "componentId": "uuid-for-component-2",
           "type": "QUESTION_MULTICHOICE",
           "slot": "main_content",
-          "content": {
-            "questionText": "Which elements are missing?",
-            "options": ["Context", "Goal", "Role", "Motivation"]
-          }
+          "content": { "questionText": "...", "options": [...] }
         }
       ]
     }
@@ -249,4 +161,4 @@ TypeScript (tsconfig.json){
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
-6. Performance & CachingPerformance Budgets:Largest Contentful Paint (LCP): < 2.5sInteraction to Next Paint (INP): < 200msFrontend JS bundle size (main chunk): < 250KB gzipped.Caching Strategy:Frontend: Static assets (JS, CSS) will be cached aggressively using hashed filenames. API responses for module data will be cached in-memory client-side for the duration of a session.Backend: In a production environment, Redis will be used to cache heavily accessed, non-personalized data, such as the list of available modules.Monitoring & Logging:Frontend: Sentry for error tracking.Backend: For local development, use console logging.
+6. Performance & CachingPerformance Budgets:Largest Contentful Paint (LCP): < 2.5sInteraction to Next Paint (INP): < 200msFrontend JS bundle size (main chunk): < 250KB gzipped.Caching Strategy:Frontend: Static assets (JS, CSS) will be cached aggressively using hashed filenames. API responses for module data will be cached in-memory client-side (e.g., using React Query) for the duration of a session.Backend: In a production environment, Redis will be used to cache heavily accessed, non-personalized data, such as the list of available modules.Monitoring & Logging:Frontend: Sentry for error tracking.Backend: For local development, use console logging. For production, use Azure Monitor for application performance monitoring (APM), logging, and alerts. Logs must be structured JSON. Key metrics to monitor: API latency (p95,

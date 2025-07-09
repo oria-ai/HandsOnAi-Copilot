@@ -5,60 +5,49 @@ import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// Variant resolution service
-const resolveComponentVariant = (component: any, userProfile: any) => {
-  // Start with default content
-  let resolvedContent = component.defaultContent;
+// Variant resolution service for skill tasks
+const resolveSkillScreenVariant = (variants: any[], userProfile: any, part: string) => {
+  // Find variants for this part (instructions or mission)
+  const partVariants = variants.filter(v => v.part === part);
+  
+  if (partVariants.length === 0) {
+    return null;
+  }
 
-  // Find the best matching variant
-  const matchingVariants = component.variants.filter((variant: any) => {
-    // Check if variant matches user profile
-    if (variant.targetRole && variant.targetRole !== userProfile.role) return false;
-    if (variant.targetAiKnowledgeLevel && variant.targetAiKnowledgeLevel !== userProfile.aiKnowledgeLevel) return false;
-    if (variant.targetCopilotLanguage && variant.targetCopilotLanguage !== userProfile.copilotLanguage) return false;
+  // Start with default variant (no targeting)
+  let bestVariant = partVariants.find(v => !v.target_role && !v.target_level && !v.target_lang);
+  
+  // Find the most specific matching variant
+  const matchingVariants = partVariants.filter((variant: any) => {
+    if (variant.target_role && variant.target_role !== userProfile.role) return false;
+    if (variant.target_level && variant.target_level !== userProfile.level) return false;
+    if (variant.target_lang && variant.target_lang !== userProfile.language_preference) return false;
     return true;
   });
 
-  // Use the most specific variant (prioritize by number of matching criteria)
   if (matchingVariants.length > 0) {
-    const bestVariant = matchingVariants.reduce((best: any, current: any) => {
-      const bestScore = (best.targetRole ? 1 : 0) + (best.targetAiKnowledgeLevel ? 1 : 0) + (best.targetCopilotLanguage ? 1 : 0);
-      const currentScore = (current.targetRole ? 1 : 0) + (current.targetAiKnowledgeLevel ? 1 : 0) + (current.targetCopilotLanguage ? 1 : 0);
+    // Use the most specific variant (prioritize by number of matching criteria)
+    bestVariant = matchingVariants.reduce((best: any, current: any) => {
+      const bestScore = (best.target_role ? 1 : 0) + (best.target_level ? 1 : 0) + (best.target_lang ? 1 : 0);
+      const currentScore = (current.target_role ? 1 : 0) + (current.target_level ? 1 : 0) + (current.target_lang ? 1 : 0);
       return currentScore > bestScore ? current : best;
     });
-    
-    resolvedContent = { ...resolvedContent, ...bestVariant.variantContent };
   }
 
-  return {
-    componentId: component.id,
-    type: component.componentType,
-    slot: component.slot,
-    content: resolvedContent
-  };
+  return bestVariant;
 };
 
 // GET /api/v1/content/steps/:stepId - Core content endpoint with personalization
 router.get('/steps/:stepId', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const stepId = parseInt(req.params.stepId);
+    const stepId = req.params.stepId;
     const user = req.user!;
 
     // Fetch step with all related data
     const step = await prisma.step.findUnique({
-      where: { id: stepId },
+      where: { step_id: stepId },
       include: {
-        module: true,
-        screens: {
-          orderBy: { order: 'asc' },
-          include: {
-            components: {
-              include: {
-                variants: true
-              }
-            }
-          }
-        }
+        module: true
       }
     });
 
@@ -69,26 +58,102 @@ router.get('/steps/:stepId', authenticateToken, async (req: AuthenticatedRequest
     // Build user profile for variant resolution
     const userProfile = {
       role: user.role,
-      aiKnowledgeLevel: user.aiKnowledgeLevel,
-      copilotLanguage: user.copilotLanguage
+      level: user.level,
+      language_preference: user.language_preference
     };
 
-    // Resolve variants for all components
-    const personalizedScreens = step.screens.map(screen => ({
-      screenId: screen.id,
-      order: screen.order,
-      components: screen.components.map(component => 
-        resolveComponentVariant(component, userProfile)
-      )
-    }));
-
-    // Build response according to API contract
-    const response = {
-      stepId: step.id,
-      type: step.type,
+    let response: any = {
+      stepId: step.step_id,
+      type: step.task_type,
       header: step.title,
-      screens: personalizedScreens
+      screens: []
     };
+
+    // Handle different task types
+    if (step.task_type === 'VIDEO') {
+      // Fetch video content
+      const videoContent = await prisma.videoStep.findUnique({
+        where: { task_id: step.task_id }
+      });
+
+      if (videoContent) {
+        response.screens = [{
+          screenId: 1,
+          order: 1,
+          components: [{
+            componentId: 1,
+            type: 'VIDEO_DISPLAY',
+            slot: 'main_content',
+            content: {
+              vimeo_url: videoContent.vimeo_url
+            }
+          }]
+        }];
+      }
+    } else if (step.task_type === 'HANDSON') {
+      // Fetch hands-on content
+      const handsOnContent = await prisma.handsOnTask.findUnique({
+        where: { task_id: step.task_id }
+      });
+
+      if (handsOnContent) {
+        response.screens = [{
+          screenId: 1,
+          order: 1,
+          components: [{
+            componentId: 1,
+            type: 'HANDSON_TASK',
+            slot: 'main_content',
+            content: {
+              title: handsOnContent.title,
+              has_download_file: handsOnContent.has_download_file,
+              download_file_url: handsOnContent.download_file_url,
+              cards_config: handsOnContent.cards_config
+            }
+          }]
+        }];
+      }
+    } else if (step.task_type === 'SKILL') {
+      // Fetch skill task screens and variants
+      const skillScreens = await prisma.skillTaskScreen.findMany({
+        where: { task_id: step.task_id },
+        include: {
+          variants: true
+        },
+        orderBy: { position: 'asc' }
+      });
+
+      response.screens = skillScreens.map(screen => {
+        const instructionsVariant = resolveSkillScreenVariant(screen.variants, userProfile, 'instructions');
+        const missionVariant = resolveSkillScreenVariant(screen.variants, userProfile, 'mission');
+
+        const components = [];
+
+        if (instructionsVariant) {
+          components.push({
+            componentId: `${screen.screen_id}_instructions`,
+            type: 'INSTRUCTIONS',
+            slot: 'top_panel',
+            content: instructionsVariant.content
+          });
+        }
+
+        if (missionVariant) {
+          components.push({
+            componentId: `${screen.screen_id}_mission`,
+            type: missionVariant.content.type || 'QUESTION_MULTICHOICE',
+            slot: 'main_content',
+            content: missionVariant.content
+          });
+        }
+
+        return {
+          screenId: screen.screen_id,
+          order: screen.position,
+          components
+        };
+      });
+    }
 
     res.json(response);
   } catch (error) {
@@ -97,23 +162,36 @@ router.get('/steps/:stepId', authenticateToken, async (req: AuthenticatedRequest
   }
 });
 
-// GET /api/v1/content/modules - Get all modules
+// GET /api/v1/content/modules - Get modules assigned to user's department
 router.get('/modules', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const modules = await prisma.module.findMany({
+    const user = req.user!;
+
+    if (!user.dept_code) {
+      return res.json([]);
+    }
+
+    // Get modules assigned to user's department
+    const assignments = await prisma.departmentModuleAssignment.findMany({
+      where: { dept_code: user.dept_code },
       include: {
-        steps: {
-          orderBy: { order: 'asc' },
-          select: {
-            id: true,
-            title: true,
-            type: true,
-            order: true
+        module: {
+          include: {
+            steps: {
+              orderBy: { position: 'asc' },
+              select: {
+                step_id: true,
+                title: true,
+                task_type: true,
+                position: true
+              }
+            }
           }
         }
       }
     });
 
+    const modules = assignments.map(assignment => assignment.module);
     res.json(modules);
   } catch (error) {
     console.error('Error fetching modules:', error);
@@ -124,18 +202,18 @@ router.get('/modules', authenticateToken, async (req: AuthenticatedRequest, res:
 // GET /api/v1/content/modules/:moduleId - Get specific module
 router.get('/modules/:moduleId', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const moduleId = parseInt(req.params.moduleId);
+    const moduleId = req.params.moduleId;
 
     const module = await prisma.module.findUnique({
-      where: { id: moduleId },
+      where: { module_id: moduleId },
       include: {
         steps: {
-          orderBy: { order: 'asc' },
+          orderBy: { position: 'asc' },
           select: {
-            id: true,
+            step_id: true,
             title: true,
-            type: true,
-            order: true
+            task_type: true,
+            position: true
           }
         }
       }
@@ -155,27 +233,23 @@ router.get('/modules/:moduleId', authenticateToken, async (req: AuthenticatedReq
 // POST /api/v1/content/progress - Update user progress
 router.post('/progress', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { stepId, status, progressPercent, lastScreen } = req.body;
-    const userId = req.user!.userId;
+    const { step_id, progress_percent } = req.body;
+    const user_id = req.user!.userId;
 
     const progress = await prisma.userProgress.upsert({
       where: {
-        userId_stepId: {
-          userId,
-          stepId: parseInt(stepId)
+        user_id_step_id: {
+          user_id,
+          step_id
         }
       },
       update: {
-        status,
-        progressPercent: progressPercent || 0,
-        lastScreen: lastScreen || 1
+        progress_percent: progress_percent || 0
       },
       create: {
-        userId,
-        stepId: parseInt(stepId),
-        status: status || 'IN_PROGRESS',
-        progressPercent: progressPercent || 0,
-        lastScreen: lastScreen || 1
+        user_id,
+        step_id,
+        progress_percent: progress_percent || 0
       }
     });
 
@@ -189,14 +263,14 @@ router.post('/progress', authenticateToken, async (req: AuthenticatedRequest, re
 // GET /api/v1/content/progress - Get user progress
 router.get('/progress', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = req.user!.userId;
+    const user_id = req.user!.userId;
 
     const progress = await prisma.userProgress.findMany({
-      where: { userId },
+      where: { user_id },
       include: {
         user: {
           select: {
-            id: true,
+            user_id: true,
             email: true,
             name: true
           }
@@ -207,6 +281,54 @@ router.get('/progress', authenticateToken, async (req: AuthenticatedRequest, res
     res.json(progress);
   } catch (error) {
     console.error('Error fetching progress:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/v1/content/submissions - Submit task answer
+router.post('/submissions', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { step_id, content } = req.body;
+    const user_id = req.user!.userId;
+
+    const submission = await prisma.taskSubmission.create({
+      data: {
+        user_id,
+        step_id,
+        content,
+        submitted_at: new Date()
+      }
+    });
+
+    res.status(201).json(submission);
+  } catch (error) {
+    console.error('Error creating submission:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// AUTHORING ENDPOINTS (for future implementation)
+
+// GET /api/v1/content/authoring/modules - Get all modules for authoring
+router.get('/authoring/modules', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const user = req.user!;
+    
+    if (user.role !== 'AUTHOR') {
+      return res.status(403).json({ error: 'Access denied. Authors only.' });
+    }
+
+    const modules = await prisma.module.findMany({
+      include: {
+        steps: {
+          orderBy: { position: 'asc' }
+        }
+      }
+    });
+
+    res.json(modules);
+  } catch (error) {
+    console.error('Error fetching modules for authoring:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

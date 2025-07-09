@@ -7,151 +7,165 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./dev.db"
+  url      = env("DATABASE_URL")
+}
+
+// 1. Identity & Organization
+model Department {
+  dept_code   String   @id
+  name        String
+  assignments DepartmentModuleAssignment[]
+  users       User[]
 }
 
 model User {
-  id                String    @id @default(cuid())
-  email             String    @unique
+  user_id           String   @id
+  email             String   @unique
+  password_hash     String
   name              String?
-  password          String // In a real app, this should be a hash
-  role              String    @default("LEARNER") // LEARNER, AUTHOR, MANAGER
-  department        String?
-  copilotLanguage   String?
-  aiKnowledgeLevel  Int       @default(1)
-  createdAt         DateTime  @default(now())
-
-  // Relations
+  department        Department? @relation(fields: [dept_code], references: [dept_code])
+  dept_code         String?
+  role              String?
+  level             Int?
+  language_preference String?
   progress          UserProgress[]
   submissions       TaskSubmission[]
   conversations     Conversation[]
   events            UserEvent[]
 }
 
+// 2. Course Catalogue & Structure  
 model Module {
-  id          Int      @id @default(autoincrement())
+  module_id   String   @id
   title       String
-  description String?
-  iconPath    String?  // e.g., '/icons/word.svg'
-  createdAt   DateTime @default(now())
-
-  // Relations
+  position    Int
   steps       Step[]
+  assignments DepartmentModuleAssignment[]
 }
 
 model Step {
-  id          Int      @id @default(autoincrement())
-  moduleId    Int
-  order       Int
+  step_id     String   @id
+  module      Module   @relation(fields: [module_id], references: [module_id])
+  module_id   String
   title       String
-  type        String   // VIDEO, ORIENTATION, SKILL, HANDSON, CHAT, CONCLUSION
-  createdAt   DateTime @default(now())
-
-  // Relations
-  module      Module        @relation(fields: [moduleId], references: [id])
-  screens     TaskScreen[]
+  position    Int
+  task_type   String // 'VIDEO', 'CONCLUSION', 'ORIENTATION', 'HANDSON', 'SKILL'
+  task_id     String   @unique
   submissions TaskSubmission[]
+  progress    UserProgress[]
+  skillScreens SkillTaskScreen[]
+  conversations Conversation[]
+  events       UserEvent[]
 }
 
-model TaskScreen {
-  id        Int      @id @default(autoincrement())
-  stepId    Int
-  order     Int
-  createdAt DateTime @default(now())
-
-  // Relations
-  step      Step                @relation(fields: [stepId], references: [id])
-  components ScreenComponent[]
+// 3. Specific Task Content Tables
+model VideoStep {
+  task_id   String @id
+  vimeo_url String
 }
 
-model ScreenComponent {
-  id             Int      @id @default(autoincrement())
-  screenId       Int
-  componentType  String   // INSTRUCTIONS, IMAGE_DISPLAY, QUESTION_MULTICHOICE, etc.
-  slot           String   // top_panel, main_content, etc.
-  defaultContent Json     // The default content for this component
-
-  // Relations
-  screen        TaskScreen         @relation(fields: [screenId], references: [id])
-  variants      ComponentVariant[]
+model ConclusionStep {
+  task_id String @id
+  markdown String
 }
 
-model ComponentVariant {
-  id                Int     @id @default(autoincrement())
-  componentId       Int
-  variantContent    Json    // The overriding content for this variant
+model HandsOnTask {
+  task_id           String @id
+  title             String
+  has_download_file Boolean
+  download_file_url String?
+  cards_config      Json
+}
 
-  // Targeting attributes
-  targetRole            String?
-  targetAiKnowledgeLevel Int?
-  targetCopilotLanguage String?
+model OrientationTask {
+  task_id String @id
+  title   String
+  screens Json
+}
 
-  // Relations
-  component ScreenComponent @relation(fields: [componentId], references: [id])
+// 4. Skill Task Tables
+model SkillTaskScreen {
+  screen_id   String   @id @default(uuid())
+  step        Step     @relation(fields: [task_id], references: [task_id])
+  task_id     String
+  position    Int
+  variants    SkillScreenVariant[]
+  events      UserEvent[]
+}
 
-  @@unique([componentId, targetRole, targetAiKnowledgeLevel, targetCopilotLanguage])
+model SkillScreenVariant {
+  variant_id    String   @id @default(uuid())
+  screen        SkillTaskScreen @relation(fields: [screen_id], references: [screen_id])
+  screen_id     String
+  part          String // 'instructions' or 'mission'
+  target_role   String?
+  target_level  Int?
+  target_lang   String?
+  content       Json
+
+  @@unique([screen_id, part, target_role, target_level, target_lang])
+}
+
+// 5. User State & Analytics
+model DepartmentModuleAssignment {
+  department   Department @relation(fields: [dept_code], references: [dept_code])
+  dept_code    String
+  module       Module     @relation(fields: [module_id], references: [module_id])
+  module_id    String
+
+  @@id([dept_code, module_id])
 }
 
 model UserProgress {
-  id         Int      @id @default(autoincrement())
-  userId     String
-  stepId     Int
-  status     String   // NOT_STARTED, IN_PROGRESS, COMPLETED
-  progressPercent Int @default(0)
-  lastScreen Int      @default(1)
-  updatedAt  DateTime @updatedAt
+  user        User   @relation(fields: [user_id], references: [user_id])
+  user_id     String
+  step        Step   @relation(fields: [step_id], references: [step_id])
+  step_id     String
+  progress_percent Int @default(0)
+  updated_at  DateTime @updatedAt
 
-  // Relations
-  user       User     @relation(fields: [userId], references: [id])
-
-  @@unique([userId, stepId])
+  @@id([user_id, step_id])
 }
 
 model TaskSubmission {
-  id           Int      @id @default(autoincrement())
-  userId       String
-  stepId       Int
-  submittedAt  DateTime @default(now())
-  content      Json
-  aiFeedback   Json?
-
-  // Relations
-  user User @relation(fields: [userId], references: [id])
-  step Step @relation(fields: [stepId], references: [id])
+  submission_id String   @id @default(uuid())
+  user        User   @relation(fields: [user_id], references: [user_id])
+  user_id     String
+  step        Step   @relation(fields: [step_id], references: [step_id])
+  step_id     String
+  submitted_at DateTime @default(now())
+  content     Json
+  ai_feedback Json?
 }
 
 model Conversation {
-  id        Int       @id @default(autoincrement())
-  userId    String
-  stepId    Int?
-  createdAt DateTime  @default(now())
-
-  // Relations
-  user      User      @relation(fields: [userId], references: [id])
-  messages  ConversationMessage[]
+  conversation_id String   @id @default(uuid())
+  user            User     @relation(fields: [user_id], references: [user_id])
+  user_id         String
+  step            Step?    @relation(fields: [step_id], references: [step_id])
+  step_id         String?
+  created_at      DateTime @default(now())
+  messages        ConversationMessage[]
 }
 
 model ConversationMessage {
-  id             Int      @id @default(autoincrement())
-  conversationId Int
-  sender         String   // USER or AI
-  content        String
-  timestamp      DateTime @default(now())
-
-  // Relations
-  conversation Conversation @relation(fields: [conversationId], references: [id])
+  message_id      String      @id @default(uuid())
+  conversation    Conversation @relation(fields: [conversation_id], references: [conversation_id])
+  conversation_id String
+  sender          String // 'USER' or 'AI'
+  content         String
+  timestamp       DateTime @default(now())
 }
 
 model UserEvent {
-  id        Int      @id @default(autoincrement())
-  userId    String
-  moduleId  Int
-  stepId    Int
-  screenId  Int?
-  eventType String
-  eventData Json?
-  timestamp DateTime @default(now())
-
-  // Relations
-  user User @relation(fields: [userId], references: [id])
+  event_id    String   @id @default(uuid())
+  user        User     @relation(fields: [user_id], references: [user_id])
+  user_id     String
+  step        Step?    @relation(fields: [step_id], references: [step_id])
+  step_id     String?
+  screen      SkillTaskScreen? @relation(fields: [screen_id], references: [screen_id])
+  screen_id   String?
+  event_type  String
+  event_data  Json?
+  timestamp   DateTime @default(now())
 }

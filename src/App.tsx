@@ -11,6 +11,7 @@ import RoleDashboard from "./components/RoleDashboard";
 import ModuleView from "./pages/ModuleView";
 import ManagerDashboard from "./pages/ManagerDashboard";
 import AuthoringDashboard from "./pages/AuthoringDashboard";
+import ModuleEditor from "./pages/ModuleEditor";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -81,6 +82,17 @@ const App = () => (
                 <ProtectedRoute>
                   <RoleBasedRoute allowedRoles={['AUTHOR']}>
                     <AuthoringDashboard />
+                  </RoleBasedRoute>
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="/authoring/module/:moduleId" 
+              element={
+                <ProtectedRoute>
+                  <RoleBasedRoute allowedRoles={['AUTHOR']}>
+                    <ModuleEditor />
                   </RoleBasedRoute>
                 </ProtectedRoute>
               } 

@@ -6,9 +6,9 @@ export interface AuthenticatedRequest extends Request {
     userId: string;
     email: string;
     role: string;
-    department?: string;
-    copilotLanguage?: string;
-    aiKnowledgeLevel?: number;
+    dept_code?: string;
+    language_preference?: string;
+    level?: number;
   };
 }
 
@@ -26,9 +26,9 @@ export const authenticateToken = (req: AuthenticatedRequest, res: Response, next
       userId: decoded.userId,
       email: decoded.email,
       role: decoded.role,
-      department: decoded.department,
-      copilotLanguage: decoded.copilotLanguage,
-      aiKnowledgeLevel: decoded.aiKnowledgeLevel
+      dept_code: decoded.dept_code,
+      language_preference: decoded.language_preference,
+      level: decoded.level
     };
     next();
   } catch (error) {

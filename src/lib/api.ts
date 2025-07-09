@@ -90,6 +90,92 @@ export const contentAPI = {
     const response = await apiClient.get('/content/progress');
     return response.data;
   },
+
+  // Authoring API methods
+  createModule: async (moduleData: {
+    title: string;
+    description?: string;
+    iconPath?: string;
+  }) => {
+    const response = await apiClient.post('/content/modules', moduleData);
+    return response.data;
+  },
+
+  updateModule: async (moduleId: number, moduleData: {
+    title?: string;
+    description?: string;
+    iconPath?: string;
+  }) => {
+    const response = await apiClient.put(`/content/modules/${moduleId}`, moduleData);
+    return response.data;
+  },
+
+  createStep: async (stepData: {
+    moduleId: number;
+    title: string;
+    type: string;
+    order?: number;
+  }) => {
+    const response = await apiClient.post('/content/steps', stepData);
+    return response.data;
+  },
+
+  updateStep: async (stepId: number, stepData: {
+    title?: string;
+    type?: string;
+    order?: number;
+  }) => {
+    const response = await apiClient.put(`/content/steps/${stepId}`, stepData);
+    return response.data;
+  },
+
+  deleteStep: async (stepId: number) => {
+    const response = await apiClient.delete(`/content/steps/${stepId}`);
+    return response.data;
+  },
+
+  createScreen: async (screenData: {
+    stepId: number;
+    order?: number;
+  }) => {
+    const response = await apiClient.post('/content/screens', screenData);
+    return response.data;
+  },
+
+  createComponent: async (componentData: {
+    screenId: number;
+    componentType: string;
+    slot: string;
+    defaultContent: any;
+  }) => {
+    const response = await apiClient.post('/content/components', componentData);
+    return response.data;
+  },
+
+  updateComponent: async (componentId: number, componentData: {
+    componentType?: string;
+    slot?: string;
+    defaultContent?: any;
+  }) => {
+    const response = await apiClient.put(`/content/components/${componentId}`, componentData);
+    return response.data;
+  },
+
+  deleteComponent: async (componentId: number) => {
+    const response = await apiClient.delete(`/content/components/${componentId}`);
+    return response.data;
+  },
+
+  createOrUpdateVariant: async (variantData: {
+    componentId: number;
+    variantContent: any;
+    targetRole?: string;
+    targetAiKnowledgeLevel?: number;
+    targetCopilotLanguage?: string;
+  }) => {
+    const response = await apiClient.post('/content/variants', variantData);
+    return response.data;
+  },
 };
 
 // Analytics API

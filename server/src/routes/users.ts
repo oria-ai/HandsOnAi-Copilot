@@ -11,16 +11,15 @@ router.get('/profile', authenticateToken, async (req: AuthenticatedRequest, res:
     const userId = req.user!.userId;
 
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { user_id: userId },
       select: {
-        id: true,
+        user_id: true,
         email: true,
         name: true,
         role: true,
-        department: true,
-        copilotLanguage: true,
-        aiKnowledgeLevel: true,
-        createdAt: true
+        dept_code: true,
+        language_preference: true,
+        level: true
       }
     });
 
@@ -39,25 +38,24 @@ router.get('/profile', authenticateToken, async (req: AuthenticatedRequest, res:
 router.put('/profile', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
-    const { name, department, copilotLanguage, aiKnowledgeLevel } = req.body;
+    const { name, dept_code, language_preference, level } = req.body;
 
     const updatedUser = await prisma.user.update({
-      where: { id: userId },
+      where: { user_id: userId },
       data: {
         name,
-        department,
-        copilotLanguage,
-        aiKnowledgeLevel
+        dept_code,
+        language_preference,
+        level
       },
       select: {
-        id: true,
+        user_id: true,
         email: true,
         name: true,
         role: true,
-        department: true,
-        copilotLanguage: true,
-        aiKnowledgeLevel: true,
-        createdAt: true
+        dept_code: true,
+        language_preference: true,
+        level: true
       }
     });
 
@@ -73,16 +71,14 @@ router.get('/', authenticateToken, requireRole(['MANAGER', 'AUTHOR']), async (re
   try {
     const users = await prisma.user.findMany({
       select: {
-        id: true,
+        user_id: true,
         email: true,
         name: true,
         role: true,
-        department: true,
-        copilotLanguage: true,
-        aiKnowledgeLevel: true,
-        createdAt: true
-      },
-      orderBy: { createdAt: 'desc' }
+        dept_code: true,
+        language_preference: true,
+        level: true
+      }
     });
 
     res.json(users);

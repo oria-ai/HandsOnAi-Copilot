@@ -6,50 +6,92 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Starting database seed...');
 
+  // Create departments
+  const departments = await Promise.all([
+    prisma.department.upsert({
+      where: { dept_code: 'marketing' },
+      update: {},
+      create: {
+        dept_code: 'marketing',
+        name: 'Marketing Department'
+      }
+    }),
+    prisma.department.upsert({
+      where: { dept_code: 'IT' },
+      update: {},
+      create: {
+        dept_code: 'IT',
+        name: 'IT Department'
+      }
+    }),
+    prisma.department.upsert({
+      where: { dept_code: 'development' },
+      update: {},
+      create: {
+        dept_code: 'development',
+        name: 'Development Department'
+      }
+    })
+  ]);
+
+  console.log('✅ Created departments');
+
   // Create users with different roles and profiles
   const users = await Promise.all([
-    prisma.user.create({
-      data: {
+    prisma.user.upsert({
+      where: { email: 'oria@gmail.com' },
+      update: {},
+      create: {
+        user_id: 'user_oria',
         email: 'oria@gmail.com',
-        password: await bcrypt.hash('1234', 10),
+        password_hash: await bcrypt.hash('1234', 10),
         name: 'Oria',
         role: 'AUTHOR',
-        department: 'development',
-        copilotLanguage: 'hebrew',
-        aiKnowledgeLevel: 3
+        dept_code: 'development',
+        language_preference: 'hebrew',
+        level: 3
       }
     }),
-    prisma.user.create({
-      data: {
+    prisma.user.upsert({
+      where: { email: 'aya@company.com' },
+      update: {},
+      create: {
+        user_id: 'user_aya',
         email: 'aya@company.com',
-        password: await bcrypt.hash('password', 10),
+        password_hash: await bcrypt.hash('password', 10),
         name: 'Aya Cohen',
         role: 'LEARNER',
-        department: 'marketing',
-        copilotLanguage: 'hebrew',
-        aiKnowledgeLevel: 1
+        dept_code: 'marketing',
+        language_preference: 'hebrew',
+        level: 1
       }
     }),
-    prisma.user.create({
-      data: {
+    prisma.user.upsert({
+      where: { email: 'yaniv@company.com' },
+      update: {},
+      create: {
+        user_id: 'user_yaniv',
         email: 'yaniv@company.com',
-        password: await bcrypt.hash('password', 10),
+        password_hash: await bcrypt.hash('password', 10),
         name: 'Yaniv Manager',
         role: 'MANAGER',
-        department: 'marketing',
-        copilotLanguage: 'hebrew',
-        aiKnowledgeLevel: 2
+        dept_code: 'marketing',
+        language_preference: 'hebrew',
+        level: 2
       }
     }),
-    prisma.user.create({
-      data: {
+    prisma.user.upsert({
+      where: { email: 'john@company.com' },
+      update: {},
+      create: {
+        user_id: 'user_john',
         email: 'john@company.com',
-        password: await bcrypt.hash('password', 10),
+        password_hash: await bcrypt.hash('password', 10),
         name: 'John Smith',
         role: 'LEARNER',
-        department: 'IT',
-        copilotLanguage: 'english',
-        aiKnowledgeLevel: 2
+        dept_code: 'IT',
+        language_preference: 'english',
+        level: 2
       }
     })
   ]);
@@ -57,251 +99,297 @@ async function main() {
   console.log('✅ Created users');
 
   // Create modules
-  const wordModule = await prisma.module.create({
-    data: {
+  const wordModule = await prisma.module.upsert({
+    where: { module_id: '01-word' },
+    update: {},
+    create: {
+      module_id: '01-word',
       title: 'קופיילוט עם Word',
-      description: 'למד כיצד להשתמש בקופיילוט ב-Microsoft Word',
-      iconPath: '/icons/word.svg'
+      position: 1
     }
   });
 
-  const excelModule = await prisma.module.create({
-    data: {
+  const excelModule = await prisma.module.upsert({
+    where: { module_id: '02-excel' },
+    update: {},
+    create: {
+      module_id: '02-excel',
       title: 'קופיילוט עם Excel',
-      description: 'למד כיצד להשתמש בקופיילוט ב-Microsoft Excel',
-      iconPath: '/icons/excel.svg'
+      position: 2
     }
   });
 
   console.log('✅ Created modules');
 
+  // Assign modules to departments
+  try {
+    await prisma.departmentModuleAssignment.createMany({
+      data: [
+        { dept_code: 'marketing', module_id: '01-word' },
+        { dept_code: 'marketing', module_id: '02-excel' },
+        { dept_code: 'IT', module_id: '01-word' },
+        { dept_code: 'development', module_id: '01-word' }
+      ]
+    });
+  } catch (error) {
+    // Ignore duplicate errors
+    console.log('⚠️ Some assignments already exist, skipping...');
+  }
+
+  console.log('✅ Created department assignments');
+
   // Create steps for Word module
-  const videoStep = await prisma.step.create({
-    data: {
-      moduleId: wordModule.id,
-      order: 1,
+  const videoStep = await prisma.step.upsert({
+    where: { step_id: 'word_v1' },
+    update: {},
+    create: {
+      step_id: 'word_v1',
+      module_id: '01-word',
+      position: 1,
       title: 'מבוא לקופיילוט ב-Word',
-      type: 'VIDEO'
+      task_type: 'VIDEO',
+      task_id: 'video_word_intro'
     }
   });
 
-  const skillStep = await prisma.step.create({
-    data: {
-      moduleId: wordModule.id,
-      order: 2,
+  const skillStep = await prisma.step.upsert({
+    where: { step_id: 'word_s1' },
+    update: {},
+    create: {
+      step_id: 'word_s1',
+      module_id: '01-word',
+      position: 2,
       title: 'שיפור פרומפט',
-      type: 'SKILL'
+      task_type: 'SKILL',
+      task_id: 'skill_prompt_improvement'
     }
   });
 
-  const handsOnStep = await prisma.step.create({
-    data: {
-      moduleId: wordModule.id,
-      order: 3,
+  const handsOnStep = await prisma.step.upsert({
+    where: { step_id: 'word_h1' },
+    update: {},
+    create: {
+      step_id: 'word_h1',
+      module_id: '01-word',
+      position: 3,
       title: 'תרגול מעשי',
-      type: 'HANDSON'
+      task_type: 'HANDSON',
+      task_id: 'handson_word_practice'
     }
   });
 
   console.log('✅ Created steps');
 
-  // Create screens for video step
-  const videoScreen = await prisma.taskScreen.create({
-    data: {
-      stepId: videoStep.id,
-      order: 1
+  // Create video step content
+  await prisma.videoStep.upsert({
+    where: { task_id: 'video_word_intro' },
+    update: {},
+    create: {
+      task_id: 'video_word_intro',
+      vimeo_url: 'https://player.vimeo.com/video/1086753235?badge=0&autopause=0&player_id=0&app_id=58479'
     }
   });
 
-  // Create video component
-  const videoComponent = await prisma.screenComponent.create({
-    data: {
-      screenId: videoScreen.id,
-      componentType: 'VIDEO_DISPLAY',
-      slot: 'main_content',
-      defaultContent: {
-        videoUrl: 'https://player.vimeo.com/video/1086753235?badge=0&autopause=0&player_id=0&app_id=58479',
-        title: 'מבוא לקופיילוט ב-Word',
-        description: 'למד את היסודות של קופיילוט ב-Word'
+  // Create hands-on task content
+  await prisma.handsOnTask.upsert({
+    where: { task_id: 'handson_word_practice' },
+    update: {},
+    create: {
+      task_id: 'handson_word_practice',
+      title: 'תרגול מעשי ב-Word',
+      has_download_file: true,
+      download_file_url: '/files/word_practice.docx',
+      cards_config: {
+        cards: [
+          {
+            title: 'משימה 1',
+            description: 'צור מסמך חדש עם קופיילוט',
+            instructions: 'השתמש בקופיילוט כדי ליצור מסמך מקצועי'
+          },
+          {
+            title: 'משימה 2', 
+            description: 'ערוך טקסט קיים',
+            instructions: 'שפר את הטקסט הקיים באמצעות קופיילוט'
+          }
+        ]
       }
     }
   });
 
-  // Create screens for skill step
-  const skillScreen1 = await prisma.taskScreen.create({
+  // Create skill task screens and variants
+  const skillScreen1 = await prisma.skillTaskScreen.create({
     data: {
-      stepId: skillStep.id,
-      order: 1
+      task_id: 'skill_prompt_improvement',
+      position: 1
     }
   });
 
-  const skillScreen2 = await prisma.taskScreen.create({
+  const skillScreen2 = await prisma.skillTaskScreen.create({
     data: {
-      stepId: skillStep.id,
-      order: 2
+      task_id: 'skill_prompt_improvement',
+      position: 2
     }
   });
 
-  // Create instructions component with variants
-  const instructionsComponent = await prisma.screenComponent.create({
-    data: {
-      screenId: skillScreen1.id,
-      componentType: 'INSTRUCTIONS',
-      slot: 'top_panel',
-      defaultContent: {
-        text: 'בחר את האלמנטים החסרים בפרומפט הבא:'
-      }
-    }
-  });
-
-  // Create variant for marketing role
-  await prisma.componentVariant.create({
-    data: {
-      componentId: instructionsComponent.id,
-      targetRole: 'marketing',
-      variantContent: {
-        text: 'כמומחה שיווק, בחר את האלמנטים החסרים בפרומפט הבא כדי ליצור תוכן שיווקי יעיל:'
-      }
-    }
-  });
-
-  // Create variant for IT role
-  await prisma.componentVariant.create({
-    data: {
-      componentId: instructionsComponent.id,
-      targetRole: 'IT',
-      variantContent: {
-        text: 'כמומחה IT, בחר את האלמנטים החסרים בפרומפט הבא כדי ליצור תיעוד טכני מדויק:'
-      }
-    }
-  });
-
-  // Create multiple choice question component
-  const questionComponent = await prisma.screenComponent.create({
-    data: {
-      screenId: skillScreen1.id,
-      componentType: 'QUESTION_MULTICHOICE',
-      slot: 'main_content',
-      defaultContent: {
-        questionText: 'אילו אלמנטים חסרים בפרומפט?',
-        options: ['הקשר', 'מטרה', 'תפקיד', 'מוטיבציה'],
-        correctAnswers: [0, 1, 2]
-      }
-    }
-  });
-
-  // Create variant for different AI knowledge levels
-  await prisma.componentVariant.create({
-    data: {
-      componentId: questionComponent.id,
-      targetAiKnowledgeLevel: 1,
-      variantContent: {
-        questionText: 'אילו אלמנטים חסרים בפרומפט? (רמה בסיסית)',
-        options: ['הקשר', 'מטרה', 'תפקיד'],
-        correctAnswers: [0, 1, 2],
-        hint: 'פרומפט טוב צריך להכיל הקשר, מטרה ותפקיד'
-      }
-    }
-  });
-
-  // Create open question for screen 2
-  const openQuestionComponent = await prisma.screenComponent.create({
-    data: {
-      screenId: skillScreen2.id,
-      componentType: 'QUESTION_OPEN',
-      slot: 'main_content',
-      defaultContent: {
-        questionText: 'כתוב פרומפט משופר עבור המשימה הבאה:',
-        placeholder: 'הכנס את הפרומפט המשופר כאן...',
-        systemPrompt: 'אנא הערך את הפרומפט שהמשתמש כתב ותן משוב בונה'
-      }
-    }
-  });
-
-  // Create variant for Hebrew language
-  await prisma.componentVariant.create({
-    data: {
-      componentId: openQuestionComponent.id,
-      targetCopilotLanguage: 'hebrew',
-      variantContent: {
-        questionText: 'כתוב פרומפט משופר בעברית עבור המשימה הבאה:',
-        placeholder: 'הכנס את הפרומפט המשופר בעברית כאן...',
-        systemPrompt: 'אנא הערך את הפרומפט בעברית שהמשתמש כתב ותן משוב בונה בעברית'
-      }
-    }
-  });
-
-  console.log('✅ Created screens and components with variants');
-
-  // Create some sample progress
-  await prisma.userProgress.createMany({
+  // Create variants for screen 1 - instructions
+  await prisma.skillScreenVariant.createMany({
     data: [
       {
-        userId: users[1].id, // Aya
-        stepId: videoStep.id,
-        status: 'COMPLETED',
-        progressPercent: 100,
-        lastScreen: 1
+        screen_id: skillScreen1.screen_id,
+        part: 'instructions',
+        content: {
+          text: 'בחר את האלמנטים החסרים בפרומפט הבא:'
+        }
       },
       {
-        userId: users[1].id, // Aya
-        stepId: skillStep.id,
-        status: 'IN_PROGRESS',
-        progressPercent: 50,
-        lastScreen: 1
+        screen_id: skillScreen1.screen_id,
+        part: 'instructions',
+        target_role: 'marketing',
+        content: {
+          text: 'כמומחה שיווק, בחר את האלמנטים החסרים בפרומפט הבא כדי ליצור תוכן שיווקי יעיל:'
+        }
       },
       {
-        userId: users[3].id, // John
-        stepId: videoStep.id,
-        status: 'IN_PROGRESS',
-        progressPercent: 75,
-        lastScreen: 1
+        screen_id: skillScreen1.screen_id,
+        part: 'instructions',
+        target_role: 'IT',
+        content: {
+          text: 'כמומחה IT, בחר את האלמנטים החסרים בפרומפט הבא כדי ליצור תיעוד טכני מדויק:'
+        }
       }
     ]
   });
+
+  // Create variants for screen 1 - mission (multiple choice question)
+  await prisma.skillScreenVariant.createMany({
+    data: [
+      {
+        screen_id: skillScreen1.screen_id,
+        part: 'mission',
+        content: {
+          type: 'QUESTION_MULTICHOICE',
+          questionText: 'אילו אלמנטים חסרים בפרומפט?',
+          options: ['הקשר', 'מטרה', 'תפקיד', 'מוטיבציה'],
+          correctAnswers: [0, 1, 2]
+        }
+      },
+      {
+        screen_id: skillScreen1.screen_id,
+        part: 'mission',
+        target_level: 1,
+        content: {
+          type: 'QUESTION_MULTICHOICE',
+          questionText: 'אילו אלמנטים חסרים בפרומפט? (רמה בסיסית)',
+          options: ['הקשר', 'מטרה', 'תפקיד'],
+          correctAnswers: [0, 1, 2],
+          hint: 'פרומפט טוב צריך להכיל הקשר, מטרה ותפקיד'
+        }
+      }
+    ]
+  });
+
+  // Create variants for screen 2 - open question
+  await prisma.skillScreenVariant.createMany({
+    data: [
+      {
+        screen_id: skillScreen2.screen_id,
+        part: 'instructions',
+        content: {
+          text: 'כתוב פרומפט משופר עבור המשימה הבאה:'
+        }
+      },
+      {
+        screen_id: skillScreen2.screen_id,
+        part: 'mission',
+        content: {
+          type: 'QUESTION_OPEN',
+          questionText: 'כתוב פרומפט משופר עבור המשימה הבאה:',
+          placeholder: 'הכנס את הפרומפט המשופר כאן...',
+          systemPrompt: 'אנא הערך את הפרומפט שהמשתמש כתב ותן משוב בונה'
+        }
+      },
+      {
+        screen_id: skillScreen2.screen_id,
+        part: 'mission',
+        target_lang: 'hebrew',
+        content: {
+          type: 'QUESTION_OPEN',
+          questionText: 'כתוב פרומפט משופר בעברית עבור המשימה הבאה:',
+          placeholder: 'הכנס את הפרומפט המשופר בעברית כאן...',
+          systemPrompt: 'אנא הערך את הפרומפט בעברית שהמשתמש כתב ותן משוב בונה בעברית'
+        }
+      }
+    ]
+  });
+
+  console.log('✅ Created skill task screens and variants');
+
+  // Create some sample progress
+  try {
+    await prisma.userProgress.createMany({
+      data: [
+        {
+          user_id: 'user_aya',
+          step_id: 'word_v1',
+          progress_percent: 100
+        },
+        {
+          user_id: 'user_aya',
+          step_id: 'word_s1',
+          progress_percent: 50
+        },
+        {
+          user_id: 'user_john',
+          step_id: 'word_v1',
+          progress_percent: 75
+        }
+      ]
+    });
+  } catch (error) {
+    console.log('⚠️ Some progress already exists, skipping...');
+  }
 
   console.log('✅ Created sample progress');
 
   // Create some sample events
-  await prisma.userEvent.createMany({
-    data: [
-      {
-        userId: users[1].id,
-        moduleId: wordModule.id,
-        stepId: videoStep.id,
-        screenId: videoScreen.id,
-        eventType: 'VIDEO_PLAY',
-        eventData: { timestamp: 0 }
-      },
-      {
-        userId: users[1].id,
-        moduleId: wordModule.id,
-        stepId: videoStep.id,
-        screenId: videoScreen.id,
-        eventType: 'VIDEO_COMPLETE',
-        eventData: { duration: 300 }
-      },
-      {
-        userId: users[1].id,
-        moduleId: wordModule.id,
-        stepId: skillStep.id,
-        screenId: skillScreen1.id,
-        eventType: 'SCREEN_VIEW',
-        eventData: { viewDuration: 45 }
-      }
-    ]
-  });
+  try {
+    await prisma.userEvent.createMany({
+      data: [
+        {
+          user_id: 'user_aya',
+          step_id: 'word_v1',
+          event_type: 'VIDEO_PLAY',
+          event_data: { timestamp: 0 }
+        },
+        {
+          user_id: 'user_aya',
+          step_id: 'word_v1',
+          event_type: 'VIDEO_COMPLETE',
+          event_data: { duration: 300 }
+        },
+        {
+          user_id: 'user_aya',
+          step_id: 'word_s1',
+          screen_id: skillScreen1.screen_id,
+          event_type: 'SCREEN_VIEW',
+          event_data: { viewDuration: 45 }
+        }
+      ]
+    });
+  } catch (error) {
+    console.log('⚠️ Some events already exist, skipping...');
+  }
 
   console.log('✅ Created sample events');
 
   console.log('🎉 Database seeded successfully!');
   console.log('\n📊 Summary:');
+  console.log(`- Departments: ${departments.length}`);
   console.log(`- Users: ${users.length}`);
   console.log(`- Modules: 2`);
   console.log(`- Steps: 3`);
-  console.log(`- Screens: 3`);
-  console.log(`- Components: 4`);
-  console.log(`- Variants: 4`);
+  console.log(`- Skill Screens: 2`);
+  console.log(`- Variants: 8`);
   console.log('\n🔑 Test accounts:');
   console.log('- Author: oria@gmail.com / 1234');
   console.log('- Learner: aya@company.com / password');
