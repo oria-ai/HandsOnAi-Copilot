@@ -27,7 +27,7 @@ const RoleDashboard = () => {
         // Stay on dashboard for learners
         break;
     }
-  }, [user, navigate]);
+  }, [user?.role, navigate]); // Only depend on role, not entire user object
 
   // If user is a learner, show the student dashboard
   if (user?.role === 'LEARNER') {

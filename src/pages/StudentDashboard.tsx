@@ -51,7 +51,8 @@ const StudentDashboard = () => {
         setModules(modulesData);
         setProgress(progressData);
       } catch (err: any) {
-        setError(err.response?.data?.message || 'שגיאה בטעינת הנתונים');
+        console.error('Error fetching dashboard data:', err);
+        setError(err.response?.data?.message || err.message || 'שגיאה בטעינת הנתונים');
       } finally {
         setLoading(false);
       }
